@@ -1,0 +1,133 @@
+name: Guru Investor OS
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        type: choice
+        default: portfolio
+        options: [portfolio, discovery, rebalancer, sec, earnings]
+  schedule:
+    - cron: '0 7 * * *'      # Portfolio Manager — κάθε μέρα 07:00
+    - cron: '0 6 * * 1'      # Stock Discovery   — κάθε Δευτέρα 06:00
+    - cron: '0 8 * * 0'      # Rebalancer        — κάθε Κυριακή 08:00
+    - cron: '0 */6 * * *'    # SEC Tracker       — κάθε 6 ώρες
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GOAL_AMOUNT: "3000"        # £ — άλλαξε στον στόχο σου
+  GOAL_MONTHS: "24"          # μήνες για τον στόχο
+  RISK_LEVEL: "moderate"     # conservative / moderate / aggressive
+
+jobs:
+
+  # ── Portfolio Manager — κάθε μέρα ──────────────────────────
+  portfolio:
+    name: Portfolio Manager
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'portfolio') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 7 * * *')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - name: Run Portfolio Manager
+        env:
+          GROQ_API_KEY:        ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY:     ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY:      ${{ secrets.FCM_SERVER_KEY }}
+          TRADING212_API_KEY:  ${{ secrets.TRADING212_API_KEY }}
+          GOAL_AMOUNT:         ${{ env.GOAL_AMOUNT }}
+          GOAL_MONTHS:         ${{ env.GOAL_MONTHS }}
+        run: python portfolio_manager.py
+
+  # ── Stock Discovery — κάθε Δευτέρα ─────────────────────────
+  discovery:
+    name: Stock Discovery
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'discovery') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - name: Run Stock Discovery
+        env:
+          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY:  ${{ secrets.FCM_SERVER_KEY }}
+          GOAL_AMOUNT:     ${{ env.GOAL_AMOUNT }}
+          GOAL_MONTHS:     ${{ env.GOAL_MONTHS }}
+          RISK_LEVEL:      ${{ env.RISK_LEVEL }}
+        run: python stock_discovery.py
+
+  # ── Rebalancer — κάθε Κυριακή ──────────────────────────────
+  rebalancer:
+    name: Rebalancer
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'rebalancer') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 8 * * 0')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - name: Run Rebalancer
+        env:
+          GROQ_API_KEY:        ${{ secrets.GROQ_API_KEY }}
+          TRADING212_API_KEY:  ${{ secrets.TRADING212_API_KEY }}
+          FCM_SERVER_KEY:      ${{ secrets.FCM_SERVER_KEY }}
+          GOAL_AMOUNT:         ${{ env.GOAL_AMOUNT }}
+          GOAL_MONTHS:         ${{ env.GOAL_MONTHS }}
+        run: python rebalancer.py
+
+  # ── SEC 13F Tracker — κάθε 6 ώρες ──────────────────────────
+  sec:
+    name: SEC 13F Tracker
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'sec') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
+          restore-keys: sec-
+      - name: Run SEC Tracker
+        env:
+          GROQ_API_KEY:  ${{ secrets.GROQ_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+        run: python sec_tracker.py
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
+
+  # ── Earnings Preview — κάθε μέρα ───────────────────────────
+  earnings:
+    name: Earnings Preview
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'earnings') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 7 * * *')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - name: Run Earnings Preview
+        env:
+          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY:  ${{ secrets.FCM_SERVER_KEY }}
+        run: python earnings.py
