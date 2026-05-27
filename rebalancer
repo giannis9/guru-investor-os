@@ -1,0 +1,121 @@
+"""
+Auto-Rebalancer — κάθε Κυριακή 08:00 UTC (GitHub Actions, δωρεάν)
+Συγκρίνει live portfolio με targets → Groq γράφει πλάνο → push notification
+"""
+import os, sys, json, asyncio, aiohttp
+from datetime import datetime
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.config    import TARGET_ALLOCATION, TRADING212_API_KEY
+from shared.notifier  import buy, sell, info
+from shared.ai_client import ask_ai
+
+T212_BASE = "https://live.trading212.com/api/v0"
+THRESHOLD = 0.05   # rebalance αν διαφορά > 5%
+MIN_EUR   = 10.0   # ελάχιστο ποσό
+
+
+async def get_portfolio(session) -> dict:
+    if not TRADING212_API_KEY:
+        print("  [DEMO] Mock portfolio")
+        return {
+            "total_value": 1247.50, "cash": 62.50,
+            "positions": [
+                {"ticker":"AMD",  "value":310.0, "pnl_pct":22.1},
+                {"ticker":"RKLB", "value":212.0, "pnl_pct":41.2},
+                {"ticker":"PLTR", "value":156.0, "pnl_pct":88.4},
+                {"ticker":"MELI", "value":125.0, "pnl_pct":14.8},
+                {"ticker":"ASTS", "value": 93.0, "pnl_pct":-8.3},
+                {"ticker":"LSE",  "value": 62.5, "pnl_pct": 5.2},
+                {"ticker":"VWCE", "value":226.5, "pnl_pct":12.0},
+            ],
+        }
+    hdrs = {"Authorization": TRADING212_API_KEY}
+    async with session.get(f"{T212_BASE}/equity/portfolio", headers=hdrs) as r:
+        if r.status != 200: return {}
+        data = await r.json()
+    positions, total = [], 0.0
+    for pos in data:
+        qty  = float(pos.get("quantity", 0))
+        avg  = float(pos.get("averagePrice", 0))
+        curr = float(pos.get("currentPrice", avg))
+        val  = qty * curr
+        pnl  = ((val - qty*avg)/(qty*avg)*100) if avg else 0
+        positions.append({"ticker": pos.get("ticker","").replace("_EQ",""),
+                          "value": round(val,2), "pnl_pct": round(pnl,2)})
+        total += val
+    async with session.get(f"{T212_BASE}/equity/account/cash", headers=hdrs) as r:
+        cash_d = await r.json() if r.status==200 else {}
+    cash = float(cash_d.get("freeForStocks", 0))
+    return {"total_value": round(total+cash,2), "cash": round(cash,2),
+            "positions": positions}
+
+
+def current_alloc(portfolio: dict) -> dict:
+    total = portfolio["total_value"]
+    res   = {p["ticker"]: round(p["value"]/total,4) for p in portfolio["positions"]}
+    res["CASH"] = round(portfolio["cash"]/total,4) if total else 0
+    return res
+
+
+def find_trades(curr: dict, target: dict, total: float) -> list:
+    trades = []
+    for ticker in set(curr)|set(target):
+        if ticker == "CASH": continue
+        cp, tp = curr.get(ticker,0.0), target.get(ticker,0.0)
+        diff   = cp - tp
+        amount = abs(diff) * total
+        if abs(diff) < THRESHOLD or amount < MIN_EUR: continue
+        trades.append({"ticker": ticker,
+                       "action": "SELL" if diff>0 else "BUY",
+                       "amount_eur": round(amount,2),
+                       "curr_pct": round(cp*100,1),
+                       "target_pct": round(tp*100,1)})
+    return sorted(trades, key=lambda x: (x["action"]=="BUY", -x["amount_eur"]))
+
+
+async def report(session, portfolio, curr_alloc, trades) -> str:
+    prompt = f"""Επενδυτικός σύμβουλος. Rebalancing report Κυριακή.
+Portfolio: €{portfolio['total_value']:,.2f} | Cash: €{portfolio['cash']:,.2f}
+Τρέχον: {json.dumps({k:f"{v*100:.1f}%" for k,v in curr_alloc.items()}, ensure_ascii=False)}
+Κινήσεις: {json.dumps(trades, ensure_ascii=False)}
+4 προτάσεις Ελληνικά: σύνοψη, σημαντικότερη κίνηση με €, γιατί, επόμενο βήμα. Χωρίς markdown."""
+    return await ask_ai(session, prompt, max_tokens=350)
+
+
+async def main():
+    print(f"[{datetime.utcnow().isoformat()}] Auto-Rebalancer starting...")
+    async with aiohttp.ClientSession() as session:
+        portfolio = await get_portfolio(session)
+        if not portfolio: return
+        print(f"  Portfolio: €{portfolio['total_value']:,.2f}")
+
+        ca     = current_alloc(portfolio)
+        trades = find_trades(ca, TARGET_ALLOCATION, portfolio["total_value"])
+        print(f"  Trades: {len(trades)}")
+
+        if not trades:
+            await info("Rebalancing Κυριακής — ΟΚ ✓",
+                       f"Portfolio €{portfolio['total_value']:,.0f} εντός targets. Καμία κίνηση.",
+                       {"type": "REBALANCE_OK"})
+            return
+
+        rep = await report(session, portfolio, ca, trades)
+        print(f"  {rep[:80]}...")
+
+        sells = sum(t["amount_eur"] for t in trades if t["action"]=="SELL")
+        buys  = sum(t["amount_eur"] for t in trades if t["action"]=="BUY")
+        await info(f"Rebalancing — {len(trades)} κινήσεις",
+                   rep, {"sells": sells, "buys": buys})
+
+        for t in trades[:5]:
+            await asyncio.sleep(0.8)
+            msg = (f"Rebalance: {'Πούλα' if t['action']=='SELL' else 'Αγόρασε'} "
+                   f"€{t['amount_eur']:.0f} {t['ticker']} "
+                   f"({t['curr_pct']}%→{t['target_pct']}%)")
+            if t["action"] == "SELL": await sell(t["ticker"], msg, urgency="medium")
+            else:                     await buy(t["ticker"], msg, source="Rebalancer")
+
+    print("Rebalancer done.")
+
+if __name__ == "__main__": asyncio.run(main())
