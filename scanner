@@ -1,0 +1,114 @@
+"""
+YouTube Guru Scanner — κάθε 15 λεπτά (GitHub Actions, δωρεάν)
+Ψάχνει: Ben Felix, Tom Nash, Andrei Jikh, Giannis Andreou κλπ
+AI: Groq llama-3.3-70b (δωρεάν)
+"""
+import os, sys, json, asyncio, aiohttp
+from datetime import datetime, timezone, timedelta
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.config    import GURU_CHANNELS, YOUTUBE_API_KEY
+from shared.notifier  import buy, sell, info
+from shared.ai_client import ask_ai, parse_json
+
+YT = "https://www.googleapis.com/youtube/v3"
+CACHE = "/tmp/yt_seen.json"
+
+
+def load_seen() -> list:
+    try:
+        with open(CACHE) as f: return json.load(f)
+    except: return []
+
+def save_seen(seen: list):
+    with open(CACHE, "w") as f: json.dump(seen[-500:], f)
+
+
+async def latest_videos(session, channel_id: str) -> list:
+    after = (datetime.now(timezone.utc) - timedelta(hours=2)
+             ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    url = (f"{YT}/search?key={YOUTUBE_API_KEY}&channelId={channel_id}"
+           f"&part=snippet&order=date&type=video"
+           f"&publishedAfter={after}&maxResults=3")
+    async with session.get(url) as r:
+        if r.status != 200: return []
+        d = await r.json()
+        return [{"id": i["id"]["videoId"], "title": i["snippet"]["title"]}
+                for i in d.get("items", [])]
+
+
+async def get_transcript(video_id: str) -> str:
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        chunks = YouTubeTranscriptApi.get_transcript(
+            video_id, languages=["en", "en-US", "el"])
+        return " ".join(c["text"] for c in chunks)[:7000]
+    except Exception as e:
+        print(f"  [transcript] {video_id}: {e}"); return ""
+
+
+async def analyze(session, guru: str, title: str, transcript: str) -> dict:
+    prompt = f"""Financial analyst. Extract stock mentions from {guru}'s video.
+
+Title: "{title}"
+Transcript: {transcript[:5000]}
+
+Return ONLY JSON:
+{{
+  "stocks": [
+    {{"ticker":"AMD","signal":"BUY","reason":"Ελληνικά 1-2 προτάσεις","confidence":80}}
+  ],
+  "summary": "Σύνοψη Ελληνικά 2-3 προτάσεις",
+  "sentiment": "BULLISH"
+}}
+Rules: signal=BUY/SELL/HOLD/WATCH, confidence 0-100, only explicitly mentioned stocks.
+"""
+    raw = await ask_ai(session, prompt, max_tokens=700, json_mode=True)
+    return parse_json(raw)
+
+
+async def main():
+    print(f"[{datetime.utcnow().isoformat()}] YouTube Scanner starting...")
+    seen = load_seen()
+    found = 0
+
+    async with aiohttp.ClientSession() as session:
+        for guru, ch_id in GURU_CHANNELS.items():
+            print(f"  {guru}...")
+            try: videos = await latest_videos(session, ch_id)
+            except Exception as e: print(f"  ERR: {e}"); continue
+
+            for v in videos:
+                if v["id"] in seen: continue
+                print(f"  NEW: {v['title'][:55]}")
+                found += 1
+
+                transcript = await get_transcript(v["id"])
+                if not transcript:
+                    seen.append(v["id"]); continue
+
+                analysis = await analyze(session, guru, v["title"], transcript)
+                summary  = analysis.get("summary", "")
+
+                if summary:
+                    await info(f"{guru} — Νέο βίντεο", summary,
+                               {"guru": guru, "video_id": v["id"]})
+                    await asyncio.sleep(1)
+
+                for s in analysis.get("stocks", []):
+                    if not s.get("ticker") or s.get("confidence", 0) < 60: continue
+                    reason = f"{guru}: {s.get('reason','')}"
+                    sig = s.get("signal", "WATCH")
+                    if sig == "BUY":   await buy(s["ticker"], reason, source="YouTube")
+                    elif sig == "SELL": await sell(s["ticker"], reason, urgency="high")
+                    else:              await info(f"{sig} — {s['ticker']}", reason,
+                                                  {"ticker": s["ticker"]})
+                    await asyncio.sleep(0.5)
+
+                seen.append(v["id"])
+                await asyncio.sleep(2)
+
+    save_seen(seen)
+    print(f"Done. {found} new videos.")
+
+if __name__ == "__main__": asyncio.run(main())
