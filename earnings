@@ -1,0 +1,116 @@
+"""
+Earnings Preview — κάθε μέρα 07:00 UTC (GitHub Actions, δωρεάν)
+24h πριν earnings: Groq υπολογίζει πιθανότητα beat → push notification
+Finnhub δωρεάν tier: 60 calls/λεπτό
+"""
+import os, sys, json, asyncio, aiohttp
+from datetime import datetime, timezone, timedelta
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.config    import WATCHLIST, FINNHUB_API_KEY
+from shared.notifier  import info
+from shared.ai_client import ask_ai, parse_json
+
+FH = f"https://finnhub.io/api/v1"
+
+
+async def calendar(session, from_d: str, to_d: str) -> list:
+    async with session.get(
+            f"{FH}/calendar/earnings?from={from_d}&to={to_d}&token={FINNHUB_API_KEY}") as r:
+        if r.status != 200: return []
+        return (await r.json()).get("earningsCalendar", [])
+
+
+async def history(session, ticker: str) -> list:
+    async with session.get(
+            f"{FH}/stock/earnings?symbol={ticker}&limit=8&token={FINNHUB_API_KEY}") as r:
+        if r.status != 200: return []
+        data = await r.json() or []
+    out = []
+    for q in data:
+        a, e = q.get("actual"), q.get("estimate")
+        if a is None or not e: continue
+        out.append({"period": q.get("period",""), "actual": a,
+                    "estimate": e, "surprise": round((a-e)/abs(e)*100,1),
+                    "beat": a > e})
+    return out
+
+
+async def recs(session, ticker: str) -> dict:
+    async with session.get(
+            f"{FH}/stock/recommendation?symbol={ticker}&token={FINNHUB_API_KEY}") as r:
+        if r.status != 200: return {}
+        data = await r.json()
+    if not data: return {}
+    l = data[0]
+    total = sum([l.get("strongBuy",0), l.get("buy",0),
+                 l.get("hold",0), l.get("sell",0), l.get("strongSell",0)])
+    buys  = l.get("strongBuy",0) + l.get("buy",0)
+    return {"total": total, "buy": buys,
+            "buy_pct": round(buys/total*100) if total else 0,
+            "hold": l.get("hold",0)}
+
+
+async def preview(session, ticker: str, event: dict,
+                  hist: list, analyst: dict) -> dict:
+    beat_cnt  = sum(1 for q in hist if q["beat"])
+    total_h   = len(hist)
+    beat_rate = round(beat_cnt/total_h*100) if total_h else 50
+    avg_surp  = sum(q["surprise"] for q in hist)/total_h if total_h else 0
+
+    prompt = f"""Αναλύσε earnings για {ticker}.
+Αύριο | EPS estimate: {event.get('epsEstimate','N/A')}
+Ιστορικό: beat {beat_rate}% ({beat_cnt}/{total_h}), μέση έκπληξη {avg_surp:.1f}%
+Τελευταία: {json.dumps(hist[:4], ensure_ascii=False)}
+Analysts: {json.dumps(analyst, ensure_ascii=False)}
+
+ΜΟΝΟ JSON:
+{{"probability_beat":72,"recommendation":"HOLD",
+  "reasoning":"2 προτάσεις Ελληνικά γιατί beat ή miss",
+  "action":"Τι να κάνεις 1 πρόταση"}}"""
+
+    raw    = await ask_ai(session, prompt, max_tokens=300, json_mode=True)
+    result = parse_json(raw)
+    if not result.get("probability_beat"):
+        result["probability_beat"] = beat_rate
+    return result
+
+
+async def main():
+    today   = datetime.now(timezone.utc)
+    tomorrow = today + timedelta(days=1)
+    from_d  = tomorrow.strftime("%Y-%m-%d")
+    to_d    = (tomorrow + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    print(f"[{today.isoformat()}] Earnings Preview — {from_d}")
+    async with aiohttp.ClientSession() as session:
+        all_e = await calendar(session, from_d, to_d)
+        ours  = [e for e in all_e if e.get("symbol","") in WATCHLIST]
+        print(f"  {len(ours)} earnings in our watchlist")
+        if not ours: return
+
+        for event in ours:
+            ticker = event["symbol"]
+            print(f"  {ticker}...")
+            hist_data, analyst_data = await asyncio.gather(
+                history(session, ticker), recs(session, ticker))
+
+            pv   = await preview(session, ticker, event, hist_data, analyst_data)
+            prob = pv.get("probability_beat", 50)
+            rec  = pv.get("recommendation","HOLD")
+            time_lbl = {"amc":"After Market","bmo":"Pre-Market"}.get(
+                event.get("hour",""),"")
+            eps  = event.get("epsEstimate","N/A")
+
+            print(f"    {prob}% beat | {rec}")
+            await info(
+                title=f"Earnings αύριο — {ticker} ({prob}% beat)",
+                body=(f"{from_d} {time_lbl} | EPS est: ${eps} | "
+                      f"{pv.get('reasoning','')} {pv.get('action','')}"),
+                data={"type":"EARNINGS","ticker":ticker,"prob":prob,"rec":rec}
+            )
+            await asyncio.sleep(2)
+
+    print("Earnings Preview done.")
+
+if __name__ == "__main__": asyncio.run(main())
