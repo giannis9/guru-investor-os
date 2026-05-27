@@ -1,0 +1,264 @@
+"""
+Portfolio Manager Agent
+- Αναλύει το portfolio σου
+- Λέει πότε να αγοράζεις / πουλάς
+- Παρακολουθεί το goal σου σε £
+- Τρέχει κάθε μέρα 07:00 UTC (GitHub Actions)
+"""
+import os, asyncio, aiohttp, json
+from datetime import datetime
+
+GROQ_KEY     = os.getenv("GROQ_API_KEY", "")
+FINNHUB_KEY  = os.getenv("FINNHUB_API_KEY", "")
+FCM_KEY      = os.getenv("FCM_SERVER_KEY", "")
+T212_KEY     = os.getenv("TRADING212_API_KEY", "")
+
+CURRENCY     = "£"
+GOAL         = float(os.getenv("GOAL_AMOUNT", "3000"))
+GOAL_MONTHS  = int(os.getenv("GOAL_MONTHS", "24"))
+
+# Το portfolio σου — ενημέρωσε με τα πραγματικά σου holdings
+PORTFOLIO = {
+    "total_value": 1247.50,
+    "cash": 62.50,
+    "positions": [
+        {"ticker": "AMD",  "name": "AMD",            "value": 310.0, "avg_cost": 120.0, "current_price": 142.0},
+        {"ticker": "RKLB", "name": "Rocket Lab",     "value": 212.0, "avg_cost": 12.0,  "current_price": 17.0},
+        {"ticker": "PLTR", "name": "Palantir",       "value": 156.0, "avg_cost": 18.0,  "current_price": 32.0},
+        {"ticker": "MELI", "name": "MercadoLibre",   "value": 125.0, "avg_cost": 1200.0,"current_price": 1380.0},
+        {"ticker": "ASTS", "name": "AST SpaceMobile","value":  93.0, "avg_cost": 25.0,  "current_price": 23.0},
+        {"ticker": "LSE",  "name": "LSE Group",      "value":  62.5, "avg_cost": 85.0,  "current_price": 89.0},
+        {"ticker": "VWCE", "name": "Vanguard ETF",   "value": 226.5, "avg_cost": 95.0,  "current_price": 107.0},
+        {"ticker": "LITE", "name": "Lumentum",       "value":  62.0, "avg_cost": 45.0,  "current_price": 48.0},
+    ]
+}
+
+TARGET_ALLOCATION = {
+    "VWCE": 0.35, "AMD":  0.18, "PLTR": 0.10,
+    "MELI": 0.10, "RKLB": 0.10, "ASTS": 0.05,
+    "LSE":  0.05, "LITE": 0.03, "CASH": 0.04,
+}
+
+STOP_LOSS_PCT    = -0.20   # -20% → sell alert
+PROFIT_TAKE_PCT  =  1.00   # +100% → consider taking profits
+OVERWEIGHT_LIMIT =  0.20   # >20% → trim
+
+
+async def ask_groq(session, prompt, max_tokens=600):
+    if not GROQ_KEY:
+        print("[GROQ] No API key"); return ""
+    headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+    body = {"model": "llama-3.3-70b-versatile", "max_tokens": max_tokens,
+            "temperature": 0.1, "messages": [{"role": "user", "content": prompt}]}
+    async with session.post("https://api.groq.com/openai/v1/chat/completions",
+                            headers=headers, json=body,
+                            timeout=aiohttp.ClientTimeout(total=30)) as r:
+        if r.status != 200:
+            print(f"[GROQ] Error {r.status}"); return ""
+        d = await r.json()
+        return d["choices"][0]["message"]["content"].strip()
+
+
+async def get_live_price(session, ticker):
+    """Finnhub live price."""
+    if not FINNHUB_KEY:
+        return None
+    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_KEY}"
+    async with session.get(url) as r:
+        if r.status != 200: return None
+        d = await r.json()
+        return d.get("c")  # current price
+
+
+async def send_push(title, body, urgency="medium"):
+    """Firebase FCM push notification."""
+    if not FCM_KEY:
+        print(f"[PUSH] {title}: {body}")
+        return
+    color = {"critical": "#c05050", "high": "#2d9b6f", "medium": "#b8860b"}.get(urgency, "#888")
+    payload = {
+        "to": "/topics/guru_alerts",
+        "priority": "high" if urgency in ("critical","high") else "normal",
+        "notification": {"title": title, "body": body},
+        "data": {"urgency": urgency, "color": color},
+        "android": {"notification": {"color": color, "channel_id": "guru_alerts"}},
+    }
+    async with aiohttp.ClientSession() as s:
+        async with s.post("https://fcm.googleapis.com/fcm/send",
+                          headers={"Authorization": f"key={FCM_KEY}",
+                                   "Content-Type": "application/json"},
+                          json=payload) as r:
+            ok = (await r.json()).get("success", 0) > 0
+            print(f"[PUSH] {'OK' if ok else 'FAIL'}: {title}")
+
+
+async def analyze_position(session, pos, total_value):
+    """Ανάλυση κάθε θέσης — buy/sell/hold signal."""
+    avg   = pos["avg_cost"]
+    curr  = pos.get("current_price", avg)
+    pnl   = (curr - avg) / avg if avg else 0
+    weight = pos["value"] / total_value
+    ticker = pos["ticker"]
+
+    signals = []
+
+    # Stop-loss
+    if pnl <= STOP_LOSS_PCT:
+        signals.append({
+            "type": "SELL", "urgency": "critical",
+            "reason": f"Stop-loss: {pnl*100:.1f}% κάτω από avg cost {CURRENCY}{avg:.2f}"
+        })
+
+    # Profit taking
+    if pnl >= PROFIT_TAKE_PCT:
+        signals.append({
+            "type": "SELL_PARTIAL", "urgency": "high",
+            "reason": f"Profit taking: +{pnl*100:.1f}% κέρδος. Πούλα 25-50%."
+        })
+
+    # Overweight
+    target_w = TARGET_ALLOCATION.get(ticker, 0)
+    if weight > OVERWEIGHT_LIMIT and weight > target_w + 0.05:
+        signals.append({
+            "type": "TRIM", "urgency": "medium",
+            "reason": f"Overweight: {weight*100:.1f}% vs target {target_w*100:.1f}%"
+        })
+
+    # Underweight — buy opportunity
+    if target_w > 0 and weight < target_w - 0.05:
+        signals.append({
+            "type": "BUY", "urgency": "low",
+            "reason": f"Underweight: {weight*100:.1f}% vs target {target_w*100:.1f}%"
+        })
+
+    return signals
+
+
+async def main():
+    print(f"\n{'='*50}")
+    print(f"Portfolio Manager Agent — {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC")
+    print(f"Goal: {CURRENCY}{GOAL:,.0f} in {GOAL_MONTHS} months")
+    print(f"{'='*50}")
+
+    total   = PORTFOLIO["total_value"]
+    cash    = PORTFOLIO["cash"]
+    needed  = GOAL - total
+    monthly = needed / GOAL_MONTHS if GOAL_MONTHS > 0 else needed
+    progress = (total / GOAL) * 100
+
+    print(f"\nPortfolio:  {CURRENCY}{total:,.2f}")
+    print(f"Goal:       {CURRENCY}{GOAL:,.0f}")
+    print(f"Progress:   {progress:.1f}%")
+    print(f"Needed:     {CURRENCY}{needed:,.2f} in {GOAL_MONTHS} months")
+    print(f"Monthly DCA needed: {CURRENCY}{monthly:,.2f}")
+
+    all_signals = []
+
+    async with aiohttp.ClientSession() as session:
+
+        # ── Update prices from Finnhub ──────────────────────
+        if FINNHUB_KEY:
+            print("\nFetching live prices...")
+            for pos in PORTFOLIO["positions"]:
+                price = await get_live_price(session, pos["ticker"])
+                if price:
+                    pos["current_price"] = price
+                    pos["value"] = pos.get("quantity", pos["value"] / pos["avg_cost"]) * price
+                await asyncio.sleep(0.5)   # rate limiting
+
+        # ── Analyze each position ───────────────────────────
+        print("\nPosition Analysis:")
+        print("-" * 50)
+        for pos in PORTFOLIO["positions"]:
+            avg  = pos["avg_cost"]
+            curr = pos.get("current_price", avg)
+            pnl  = (curr - avg) / avg * 100
+            w    = pos["value"] / total * 100
+            pnl_icon = "🟢" if pnl >= 0 else "🔴"
+
+            print(f"  {pos['ticker']:<6} {pnl_icon} {pnl:+6.1f}%  "
+                  f"{CURRENCY}{pos['value']:>8,.2f}  ({w:.1f}%)")
+
+            signals = await analyze_position(session, pos, total)
+            for sig in signals:
+                print(f"    → {sig['type']}: {sig['reason']}")
+                all_signals.append({"ticker": pos["ticker"], **sig})
+
+        # ── Rebalancing trades ──────────────────────────────
+        print("\nRebalancing:")
+        print("-" * 50)
+        trades = []
+        for ticker, target_pct in TARGET_ALLOCATION.items():
+            if ticker == "CASH": continue
+            curr_pos  = next((p for p in PORTFOLIO["positions"] if p["ticker"] == ticker), None)
+            curr_pct  = (curr_pos["value"] / total) if curr_pos else 0
+            diff      = curr_pct - target_pct
+            amount    = abs(diff) * total
+            if abs(diff) < 0.05 or amount < 10: continue
+            action = "SELL" if diff > 0 else "BUY"
+            trades.append({"ticker": ticker, "action": action,
+                           "amount": round(amount, 2), "diff": round(diff*100, 1)})
+            print(f"  {action:<4} {CURRENCY}{amount:>7.2f}  {ticker}  "
+                  f"({curr_pct*100:.1f}%→{target_pct*100:.1f}%)")
+
+        if not trades:
+            print("  Portfolio balanced ✓")
+
+        # ── Groq AI full analysis ───────────────────────────
+        positions_summary = [
+            {
+                "ticker": p["ticker"],
+                "pnl_pct": round((p.get("current_price", p["avg_cost"]) - p["avg_cost"]) / p["avg_cost"] * 100, 1),
+                "weight_pct": round(p["value"] / total * 100, 1),
+                "value_gbp": round(p["value"], 2),
+            }
+            for p in PORTFOLIO["positions"]
+        ]
+
+        prompt = f"""Είσαι AI portfolio manager. Αναλύσε το portfolio και δώσε συγκεκριμένες συστάσεις.
+
+PORTFOLIO ({CURRENCY}{total:,.2f} σύνολο):
+{json.dumps(positions_summary, ensure_ascii=False, indent=2)}
+
+ΣΤΟΧΟΣ: {CURRENCY}{GOAL:,.0f} σε {GOAL_MONTHS} μήνες
+ΠΡΟΟΔΟΣ: {progress:.1f}% ({CURRENCY}{total:,.2f} / {CURRENCY}{GOAL:,.0f})
+ΧΡΕΙΑΖΕΣΑΙ: {CURRENCY}{monthly:,.2f}/μήνα επιπλέον για να πιάσεις τον στόχο
+
+SIGNALS που βρέθηκαν: {json.dumps(all_signals, ensure_ascii=False)}
+REBALANCING: {json.dumps(trades, ensure_ascii=False)}
+
+Δώσε:
+1. Σύνοψη portfolio (1 πρόταση)
+2. Τις 3 πιο επείγουσες κινήσεις (ΑΓΟΡΑ/ΠΟΥΛΗΣΗ με συγκεκριμένα ποσά σε {CURRENCY})
+3. Αν είσαι on track για τον στόχο — αν όχι, τι να αλλάξεις
+4. Μία σύσταση για νέα αγορά αυτή την εβδομάδα
+
+Στα Ελληνικά, συνοπτικά, χωρίς markdown."""
+
+        print("\nGroq AI Analysis:")
+        print("=" * 50)
+        analysis = await ask_groq(session, prompt, max_tokens=700)
+        print(analysis)
+
+        # ── Send push notifications ─────────────────────────
+        # Critical signals first
+        for sig in all_signals:
+            if sig["urgency"] == "critical":
+                await send_push(
+                    f"🔴 ΠΟΥΛΑ — {sig['ticker']}",
+                    sig["reason"],
+                    urgency="critical"
+                )
+                await asyncio.sleep(1)
+
+        # Daily summary
+        on_track = progress >= (100 * (1 - GOAL_MONTHS/36))
+        summary  = f"{CURRENCY}{total:,.0f} / {CURRENCY}{GOAL:,.0f} ({progress:.0f}%). "
+        summary += "On track ✓" if on_track else f"Χρειάζεσαι {CURRENCY}{monthly:,.0f}/μήνα"
+        await send_push("📊 Daily Portfolio Report", summary, urgency="medium")
+
+    print(f"\n{'='*50}")
+    print("Portfolio Manager done.")
+
+
+asyncio.run(main())
