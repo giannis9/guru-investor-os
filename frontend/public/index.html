@@ -3,588 +3,461 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<meta name="theme-color" content="#2d9b6f"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#00c896"/>
 <meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="Guru Investor"/>
 <title>Guru Investor OS</title>
 <link rel="manifest" href="/manifest.json"/>
-<link rel="icon" href="/icon-192.png"/>
-
-<!-- Tabler Icons CDN -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/tabler-icons.min.css"/>
-
 <style>
-:root{
-  --g:#1a6b4a;--gm:#2d9b6f;--gl:#e8f5ee;
-  --gold:#7a5200;--goldl:#fdf7e3;
-  --red:#9a1a1a;--redl:#fdf0ee;
-  --blue:#0d3a8a;--bluel:#e6f0fb;
-  --bg:#0f1a14;--surf:#17261d;--surf2:#1e3326;
-  --border:#2a4035;--txt:#e8f2ec;--muted:#7aaa8a;
-  --rad:14px;--radm:10px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);color:var(--txt);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  overscroll-behavior:none;}
+:root{
+  --green:#00c896;--green2:#00a87e;--green-dim:rgba(0,200,150,.12);
+  --red:#ff4f6a;--red-dim:rgba(255,79,106,.12);
+  --gold:#f0b429;--gold-dim:rgba(240,180,41,.12);
+  --blue:#4d9fff;--blue-dim:rgba(77,159,255,.12);
+  --bg:#080e0c;--surf:#0d1a15;--surf2:#112018;--surf3:#162a20;
+  --border:rgba(0,200,150,.12);--border2:rgba(255,255,255,.06);
+  --txt:#e8f5f0;--muted:#6a9e88;
+  --font:'Syne',sans-serif;--mono:'DM Mono',monospace;
+  --rad:16px;--radm:10px;--rads:6px;
+  --safe:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--font);overscroll-behavior:none;}
+.app{display:flex;flex-direction:column;height:100vh;max-width:430px;margin:0 auto;}
 
-/* ── Layout ─────────────────────────────────────── */
-.app{display:flex;flex-direction:column;height:100vh;max-width:430px;
-  margin:0 auto;position:relative;}
+/* ── Topbar ── */
+.topbar{background:var(--surf);border-bottom:1px solid var(--border);padding:14px 16px 10px;
+  display:flex;justify-content:space-between;align-items:center;flex-shrink:0;
+  position:relative;}
+.topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);}
+.logo{font-size:17px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center;gap:8px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  animation:blink 2s infinite;box-shadow:0 0 8px var(--green);}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 8px var(--green);}50%{opacity:.3;box-shadow:none;}}
+.logo-sub{font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.5px;margin-top:1px;}
 
-/* ── Top bar ─────────────────────────────────────── */
-.topbar{background:var(--surf);border-bottom:1px solid var(--border);
-  padding:12px 16px 10px;display:flex;justify-content:space-between;
-  align-items:center;flex-shrink:0;}
-.topbar-title{font-size:16px;font-weight:600;letter-spacing:-.3px;}
-.live-dot{width:7px;height:7px;border-radius:50%;background:#2d9b6f;
-  display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-
-/* ── Tabs ────────────────────────────────────────── */
-.tabs{display:flex;background:var(--surf);border-bottom:1px solid var(--border);
-  overflow-x:auto;scrollbar-width:none;flex-shrink:0;}
-.tabs::-webkit-scrollbar{display:none;}
-.tab-btn{flex:none;padding:9px 11px;font-size:10px;color:var(--muted);
-  background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
-  white-space:nowrap;font-family:inherit;transition:color .15s;}
-.tab-btn i{font-size:16px;display:block;margin-bottom:2px;}
-.tab-btn.on{color:var(--gm);border-bottom-color:var(--gm);}
-
-/* ── Scroll area ─────────────────────────────────── */
-.content{flex:1;overflow-y:auto;padding:12px;
-  padding-bottom:calc(70px + var(--safe-bottom));}
-.screen{display:none;}
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;padding:12px 12px calc(76px + var(--safe));scrollbar-width:none;}
+.content::-webkit-scrollbar{display:none;}
+.screen{display:none;animation:fadeUp .25s ease;}
 .screen.on{display:block;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 
-/* ── Bottom nav ──────────────────────────────────── */
-.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-  width:100%;max-width:430px;background:var(--surf);
-  border-top:1px solid var(--border);display:flex;
-  padding-bottom:var(--safe-bottom);}
-.nav-btn{flex:1;padding:10px 4px 8px;text-align:center;font-size:10px;
+/* ── Bottom nav ── */
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;
+  background:var(--surf);border-top:1px solid var(--border);
+  display:flex;padding-bottom:var(--safe);z-index:100;}
+.nav-btn{flex:1;padding:10px 2px 8px;text-align:center;font-size:9px;font-weight:600;
   color:var(--muted);background:none;border:none;cursor:pointer;
-  font-family:inherit;transition:color .15s;}
-.nav-btn i{font-size:22px;display:block;margin-bottom:2px;}
-.nav-btn.on{color:var(--gm);}
-.nav-badge{background:var(--red);color:#fff;font-size:9px;font-weight:700;
-  border-radius:20px;padding:1px 5px;margin-left:2px;vertical-align:top;}
+  font-family:var(--font);letter-spacing:.3px;transition:color .2s;text-transform:uppercase;}
+.nav-btn i{font-size:20px;display:block;margin-bottom:3px;transition:transform .2s;}
+.nav-btn.on{color:var(--green);}
+.nav-btn.on i{transform:translateY(-2px);}
+.nav-badge{background:var(--red);color:#fff;font-size:8px;font-weight:700;
+  border-radius:20px;padding:1px 4px;margin-left:2px;vertical-align:top;font-family:var(--mono);}
 
-/* ── Cards ───────────────────────────────────────── */
-.card{background:var(--surf);border:1px solid var(--border);
-  border-radius:var(--rad);padding:13px;margin-bottom:10px;}
-.stitle{font-size:10px;font-weight:600;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px;}
+/* ── Cards ── */
+.card{background:var(--surf);border:1px solid var(--border2);border-radius:var(--rad);
+  padding:14px;margin-bottom:10px;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.4;}
+.stitle{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.stitle::after{content:'';flex:1;height:1px;background:var(--border2);}
 
-/* ── Portfolio hero ──────────────────────────────── */
-.hero{background:linear-gradient(135deg,#0a2018 0%,#1a4a35 100%);
-  border:1px solid #2d6b4a;border-radius:var(--rad);padding:16px;margin-bottom:10px;}
-.hero-label{font-size:12px;color:#9fcfb3;margin-bottom:6px;}
-.hero-value{font-size:34px;font-weight:700;color:#fff;margin-bottom:6px;
-  letter-spacing:-1px;}
-.hero-change{font-size:13px;color:#5ee8a3;}
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,#060f0b 0%,#0a1f17 50%,#091a12 100%);
+  border:1px solid var(--border);border-radius:var(--rad);padding:18px;margin-bottom:10px;
+  position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:-40px;right:-40px;width:120px;height:120px;
+  background:radial-gradient(circle,rgba(0,200,150,.15),transparent 70%);pointer-events:none;}
+.hero-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.8px;
+  text-transform:uppercase;margin-bottom:8px;}
+.hero-value{font-size:38px;font-weight:800;color:var(--txt);letter-spacing:-2px;
+  font-family:var(--mono);line-height:1;}
+.hero-value span{font-size:22px;color:var(--green);}
+.hero-change{font-size:13px;color:var(--green);margin-top:6px;font-family:var(--mono);}
+.hero-prog{margin-top:12px;}
+.prog-lbl{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;
+  font-family:var(--mono);}
+.prog-lbl .pct{color:var(--green);font-weight:500;}
+.prog-track{height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--green2),var(--green));
+  border-radius:2px;transition:width .8s ease;box-shadow:0 0 8px var(--green);}
 
-/* ── Metrics grid ────────────────────────────────── */
+/* ── Grid ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
-.met{background:var(--surf2);border-radius:var(--radm);padding:10px 12px;}
-.met-lbl{font-size:10px;color:var(--muted);margin-bottom:3px;}
-.met-val{font-size:19px;font-weight:600;}
-.green{color:#5ee8a3;} .red{color:#f08080;}
-.gold{color:#e8c060;}  .blue{color:#80b0f0;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px;}
+.met{background:var(--surf2);border:1px solid var(--border2);border-radius:var(--radm);padding:10px 11px;}
+.met-lbl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.6px;margin-bottom:4px;}
+.met-val{font-size:18px;font-weight:700;font-family:var(--mono);}
+.c-green{color:var(--green);} .c-red{color:var(--red);} .c-gold{color:var(--gold);} .c-blue{color:var(--blue);}
 
-/* ── Chip ────────────────────────────────────────── */
-.chip{display:inline-block;font-size:10px;padding:2px 7px;
-  border-radius:20px;font-weight:600;}
-.cg{background:rgba(45,155,111,.2);color:#5ee8a3;}
-.cr{background:rgba(192,80,80,.2);color:#f08080;}
-.cgold{background:rgba(184,134,11,.2);color:#e8c060;}
-.cb{background:rgba(64,128,208,.2);color:#80b0f0;}
-.cgray{background:var(--surf2);color:var(--muted);border:1px solid var(--border);}
+/* ── Chip ── */
+.chip{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;
+  border-radius:20px;font-weight:700;font-family:var(--mono);}
+.ch-g{background:var(--green-dim);color:var(--green);}
+.ch-r{background:var(--red-dim);color:var(--red);}
+.ch-gold{background:var(--gold-dim);color:var(--gold);}
+.ch-b{background:var(--blue-dim);color:var(--blue);}
+.ch-dim{background:rgba(255,255,255,.06);color:var(--muted);}
 
-/* ── Holding row ─────────────────────────────────── */
+/* ── Signal box ── */
+.sb{border-radius:var(--radm);padding:11px 13px;margin-bottom:9px;border-left:3px solid;}
+.sb-buy{background:var(--green-dim);border-color:var(--green);}
+.sb-sell{background:var(--red-dim);border-color:var(--red);}
+.sb-hold{background:var(--gold-dim);border-color:var(--gold);}
+.sb-info{background:var(--blue-dim);border-color:var(--blue);}
+.sb-title{font-size:12px;font-weight:700;margin-bottom:3px;font-family:var(--mono);}
+.sb-buy .sb-title{color:var(--green);}  .sb-sell .sb-title{color:var(--red);}
+.sb-hold .sb-title{color:var(--gold);}  .sb-info .sb-title{color:var(--blue);}
+.sb-desc{font-size:11px;line-height:1.5;color:var(--muted);}
+
+/* ── Holdings table ── */
 .h-row{display:flex;align-items:center;justify-content:space-between;
-  padding:9px 0;border-bottom:1px solid var(--border);}
+  padding:8px 0;border-bottom:1px solid var(--border2);}
 .h-row:last-child{border-bottom:none;}
-.h-ticker{font-size:14px;font-weight:600;}
-.h-name{font-size:11px;color:var(--muted);}
-.h-val{font-size:14px;font-weight:600;text-align:right;}
-.h-pct{font-size:11px;text-align:right;}
+.h-ticker{font-size:13px;font-weight:700;font-family:var(--mono);color:var(--txt);}
+.h-name{font-size:10px;color:var(--muted);margin-top:1px;}
+.h-val{font-size:13px;font-weight:600;font-family:var(--mono);text-align:right;}
+.h-pct{font-size:10px;text-align:right;font-family:var(--mono);}
+.h-bar{height:2px;background:var(--border2);border-radius:1px;margin-top:3px;overflow:hidden;}
+.h-bar-fill{height:100%;border-radius:1px;background:var(--green);}
 
-/* ── Signal box ──────────────────────────────────── */
-.sb{border-radius:var(--radm);padding:11px 13px;margin-bottom:9px;border:1px solid;}
-.sb-buy{background:rgba(45,155,111,.12);border-color:#2d9b6f;}
-.sb-sell{background:rgba(192,80,80,.12);border-color:#c05050;}
-.sb-hold{background:rgba(184,134,11,.12);border-color:#b88020;}
-.sb-info{background:rgba(64,128,208,.12);border-color:#4080d0;}
-.sb-title{font-size:13px;font-weight:600;margin-bottom:4px;}
-.sb-buy .sb-title{color:#5ee8a3;} .sb-sell .sb-title{color:#f08080;}
-.sb-hold .sb-title{color:#e8c060;} .sb-info .sb-title{color:#80b0f0;}
-.sb-desc{font-size:12px;line-height:1.5;color:var(--muted);}
-
-/* ── Progress bar ────────────────────────────────── */
-.prog-wrap{margin-bottom:8px;}
-.prog-hd{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;}
-.prog-track{height:6px;background:var(--surf2);border-radius:3px;overflow:hidden;}
-.prog-fill{height:100%;border-radius:3px;background:var(--gm);
-  transition:width .6s ease;}
-
-/* ── Bar ─────────────────────────────────────────── */
-.bar-wrap{margin-bottom:7px;}
-.bar-hd{display:flex;justify-content:space-between;font-size:11px;
-  margin-bottom:2px;color:var(--muted);}
-.bar-track{height:4px;background:var(--surf2);border-radius:2px;overflow:hidden;}
-.bar-fill{height:100%;border-radius:2px;}
-
-/* ── Notification item ───────────────────────────── */
-.notif{display:flex;gap:10px;padding:10px 0;
-  border-bottom:1px solid var(--border);}
+/* ── Notification ── */
+.notif{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2);}
 .notif:last-child{border-bottom:none;}
-.n-icon{width:34px;height:34px;border-radius:10px;display:flex;
-  align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
-.ni-b{background:rgba(45,155,111,.2);}
-.ni-s{background:rgba(192,80,80,.2);}
-.ni-w{background:rgba(184,134,11,.2);}
-.ni-i{background:rgba(64,128,208,.2);}
-.n-title{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:2px;}
-.n-desc{font-size:12px;color:var(--muted);line-height:1.4;}
-.n-time{font-size:10px;color:var(--muted);margin-top:3px;}
+.n-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:16px;flex-shrink:0;}
+.ni-b{background:var(--green-dim);}  .ni-s{background:var(--red-dim);}
+.ni-w{background:var(--gold-dim);}   .ni-i{background:var(--blue-dim);}
+.n-title{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:2px;}
+.n-desc{font-size:11px;color:var(--muted);line-height:1.4;}
+.n-time{font-size:9px;color:var(--muted);margin-top:3px;font-family:var(--mono);letter-spacing:.3px;}
 
-/* ── Feed item ───────────────────────────────────── */
-.feed-item{background:var(--surf);border:1px solid var(--border);
-  border-radius:var(--rad);padding:11px;margin-bottom:8px;}
-.feed-head{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
-.av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
-.feed-body{font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:7px;}
-.feed-tags{display:flex;flex-wrap:wrap;gap:4px;}
+/* ── Pick card ── */
+.pick{background:var(--surf2);border:1px solid var(--border2);border-radius:var(--rad);
+  padding:13px;margin-bottom:9px;position:relative;}
+.pick-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.pick-ticker{font-size:17px;font-weight:800;font-family:var(--mono);}
+.pick-name{font-size:11px;color:var(--muted);margin-top:1px;}
+.pick-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+.pick-stat{background:var(--surf3);border-radius:var(--rads);padding:6px 8px;}
+.pick-stat-lbl{font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.pick-stat-val{font-size:13px;font-weight:700;font-family:var(--mono);margin-top:2px;}
+.pick-why{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:7px;}
+.pick-gurus{display:flex;flex-wrap:wrap;gap:4px;}
 
-/* ── Sector card ─────────────────────────────────── */
-.sector-card{background:var(--surf);border:1px solid var(--border);
-  border-radius:var(--rad);padding:11px;margin-bottom:8px;}
-.sec-hd{display:flex;justify-content:space-between;align-items:flex-start;
-  margin-bottom:5px;}
-.sec-name{font-size:14px;font-weight:600;}
-.sec-why{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:7px;}
-.sec-picks{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px;}
-
-/* ── Button ──────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 13px;
-  border-radius:var(--radm);font-size:12px;cursor:pointer;
-  border:1px solid var(--border);background:var(--surf);color:var(--txt);
-  font-family:inherit;transition:background .15s;width:100%;
-  justify-content:center;margin-top:6px;}
-.btn:active{background:var(--surf2);}
-.btn-p{background:var(--g);color:#fff;border-color:var(--g);}
-.btn-p:active{background:var(--gm);}
-
-/* ── Goal inputs ─────────────────────────────────── */
-.inp-lbl{font-size:12px;color:var(--muted);margin-top:10px;
-  margin-bottom:3px;display:block;}
-.inp{width:100%;padding:9px 11px;border:1px solid var(--border);
-  border-radius:var(--radm);background:var(--surf2);color:var(--txt);
-  font-size:14px;font-family:inherit;outline:none;}
-.inp:focus{border-color:var(--gm);}
+/* ── Goal screen ── */
+.inp-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.6px;margin-top:12px;margin-bottom:4px;display:block;}
+.inp{width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--radm);
+  background:var(--surf2);color:var(--txt);font-size:15px;font-family:var(--mono);
+  outline:none;transition:border-color .2s;}
+.inp:focus{border-color:var(--green);}
 select.inp option{background:var(--surf);}
 
-/* ── Code block ──────────────────────────────────── */
-.code{background:var(--surf2);border:1px solid var(--border);
-  border-radius:var(--radm);padding:10px;font-family:monospace;
-  font-size:10px;color:var(--muted);line-height:1.6;overflow-x:auto;
-  margin-bottom:8px;white-space:pre;}
+/* ── Button ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 16px;border-radius:var(--radm);font-size:12px;font-weight:700;
+  cursor:pointer;border:1px solid var(--border2);background:var(--surf2);
+  color:var(--txt);font-family:var(--font);letter-spacing:.3px;
+  width:100%;margin-top:8px;transition:all .2s;text-transform:uppercase;}
+.btn:active{transform:scale(.98);}
+.btn-p{background:var(--green);color:#000;border-color:var(--green);}
+.btn-p:active{background:var(--green2);}
 
-/* ── Install banner ──────────────────────────────── */
-.install-banner{background:linear-gradient(135deg,#0a2018,#1a4a35);
-  border:1px solid var(--gm);border-radius:var(--rad);padding:13px;
-  margin-bottom:10px;display:none;}
-.install-banner.show{display:flex;gap:10px;align-items:center;}
+/* ── Bar ── */
+.bar-wrap{margin-bottom:7px;}
+.bar-hd{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;
+  font-family:var(--mono);}
+.bar-track{height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:2px;}
 
-/* ── Toast ───────────────────────────────────────── */
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
-  background:var(--surf);border:1px solid var(--border);border-radius:var(--rad);
-  padding:10px 16px;font-size:13px;z-index:999;display:none;
-  max-width:320px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.4);}
-.toast.show{display:block;animation:fadeInUp .3s ease;}
-@keyframes fadeInUp{from{opacity:0;transform:translateX(-50%) translateY(10px);}
-  to{opacity:1;transform:translateX(-50%) translateY(0);}}
+/* ── Sector card ── */
+.sector{background:var(--surf2);border:1px solid var(--border2);border-radius:var(--rad);
+  padding:12px;margin-bottom:8px;}
+.sec-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.sec-name{font-size:14px;font-weight:700;}
+.sec-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.sec-why{font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:7px;}
+.sec-picks{display:flex;flex-wrap:wrap;gap:4px;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:85px;left:50%;transform:translateX(-50%);
+  background:var(--surf);border:1px solid var(--green);border-radius:var(--radm);
+  padding:10px 18px;font-size:12px;font-weight:600;z-index:999;display:none;
+  max-width:320px;text-align:center;box-shadow:0 4px 20px rgba(0,200,150,.2);
+  font-family:var(--mono);color:var(--green);}
+.toast.show{display:block;animation:fadeUp .3s ease;}
+
+/* ── Install banner ── */
+.install-banner{display:none;background:linear-gradient(135deg,var(--green-dim),transparent);
+  border:1px solid var(--green);border-radius:var(--rad);padding:12px;margin-bottom:10px;
+  flex-direction:row;align-items:center;gap:10px;}
+.install-banner.show{display:flex;}
 </style>
 </head>
 <body>
-
 <div class="app">
-  <!-- Top bar -->
+
+  <!-- Topbar -->
   <div class="topbar">
-    <div class="topbar-title"><span class="live-dot"></span>Guru Investor OS</div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span class="chip cg" id="aiStatus">Groq AI</span>
-      <button onclick="showNotifPrompt()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:22px;">
+    <div>
+      <div class="logo"><div class="logo-dot"></div>Guru Investor OS</div>
+      <div class="logo-sub">AI · Buy/Sell Signals · £ GBP</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="chip ch-g">Groq AI</span>
+      <button onclick="switchNav('signals')" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:22px;position:relative;">
         <i class="ti ti-bell"></i>
+        <span class="nav-badge" style="position:absolute;top:-2px;right:-4px;">3</span>
       </button>
     </div>
   </div>
 
-  <!-- Sub-tabs (hidden on mobile nav, shown on some screens) -->
-  <div class="tabs" id="subtabs" style="display:none;"></div>
-
-  <!-- Main content -->
+  <!-- Content -->
   <div class="content">
 
-    <!-- Install banner for Android -->
-    <div class="install-banner" id="installBanner">
-      <i class="ti ti-device-mobile" style="font-size:28px;color:var(--gm);flex-shrink:0;"></i>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;margin-bottom:2px;">Εγκατάστασε στο Android</div>
-        <div style="font-size:11px;color:var(--muted);">Chrome → 3 τελείες → "Εγκατάσταση εφαρμογής"</div>
-      </div>
-      <button onclick="installApp()" class="btn btn-p" style="width:auto;margin:0;padding:6px 12px;">Εγκ/ση</button>
-    </div>
-
-    <!-- ── DASHBOARD ─────────────────────────────── -->
+    <!-- ── HOME ── -->
     <div class="screen on" id="sc-home">
+      <div class="install-banner" id="installBanner">
+        <i class="ti ti-device-mobile" style="font-size:26px;color:var(--green);flex-shrink:0;"></i>
+        <div style="flex:1;font-size:12px;">
+          <div style="font-weight:700;margin-bottom:2px;">Εγκατάσταση στο Android</div>
+          <div style="color:var(--muted);font-size:11px;">Chrome ⋮ → "Εγκατάσταση εφαρμογής"</div>
+        </div>
+        <button onclick="installApp()" class="btn btn-p" style="width:auto;margin:0;padding:6px 12px;font-size:11px;">Install</button>
+      </div>
+
       <div class="hero">
-        <div class="hero-label">Σύνολο χαρτοφυλακίου</div>
-        <div class="hero-value">€1,247.50</div>
-        <div class="hero-change">▲ +€26.40 σήμερα (+2.2%)</div>
+        <div class="hero-label">Total Portfolio</div>
+        <div class="hero-value"><span>£</span>497.37</div>
+        <div class="hero-change">▲ Σε πρόοδο</div>
+        <div class="hero-prog">
+          <div class="prog-lbl">
+            <span style="color:var(--muted);">£497 → £5,000 Goal</span>
+            <span class="pct">9.9%</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill" style="width:9.9%;"></div></div>
+        </div>
       </div>
 
       <div class="g2">
-        <div class="met"><div class="met-lbl">Συνολική απόδοση</div>
-          <div class="met-val green">+31.4%</div></div>
-        <div class="met"><div class="met-lbl">Guru Score</div>
-          <div class="met-val gold">78/100</div></div>
-        <div class="met"><div class="met-lbl">Θέσεις</div>
-          <div class="met-val blue">14</div></div>
-        <div class="met"><div class="met-lbl">Στόχος</div>
-          <div class="met-val green">€3,000</div></div>
+        <div class="met"><div class="met-lbl">Στόχος</div><div class="met-val c-green">£5,000</div></div>
+        <div class="met"><div class="met-lbl">Χρόνος</div><div class="met-val c-gold">12 μήνες</div></div>
+        <div class="met"><div class="met-lbl">Holdings</div><div class="met-val c-blue">27</div></div>
+        <div class="met"><div class="met-lbl">DCA/μήνα</div><div class="met-val">£200</div></div>
       </div>
 
-      <!-- Goal progress -->
-      <div class="card">
-        <div class="stitle">Πρόοδος στόχου</div>
-        <div class="prog-wrap">
-          <div class="prog-hd"><span>€1,247 → €3,000</span>
-            <span style="font-weight:600;color:var(--gm);">42%</span></div>
-          <div class="prog-track"><div class="prog-fill" style="width:42%;"></div></div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">
-          Εκτίμηση: ~14 μήνες με €100/μήνα + 15% ετήσια απόδοση
-        </div>
-      </div>
-
-      <!-- AI insight -->
       <div class="sb sb-info">
-        <div class="sb-title"><i class="ti ti-sparkles"></i> AI Signal — Τώρα</div>
-        <div class="sb-desc">AMD earnings αύριο — 72% πιθανότητα beat. Μην πουλάς πριν. RKLB -6% χωρίς news = dip buying ευκαιρία κάτω από $22.</div>
+        <div class="sb-title">⚡ AI SIGNAL — ΤΩΡΑ</div>
+        <div class="sb-desc">PLTR +88% — εξέτασε partial profit taking (25%). LITE £165 είναι η μεγαλύτερη θέση σου (33%). Groq AI: ανισορροπία χαρτοφυλακίου — χρειάζεται rebalancing.</div>
       </div>
 
-      <!-- Top movers -->
       <div class="card">
-        <div class="stitle">Top Movers σήμερα</div>
+        <div class="stitle">Top Holdings</div>
         <div class="h-row">
-          <div><div class="h-ticker">RKLB</div><div class="h-name">Rocket Lab</div></div>
-          <div><div class="h-val">€212</div><div class="h-pct red">-6.1% · DIP</div></div>
+          <div><div class="h-ticker">LITE</div><div class="h-name">Lumentum</div></div>
+          <div><div class="h-val">£165.11</div><div class="h-pct c-green">33.2%</div>
+            <div class="h-bar"><div class="h-bar-fill" style="width:100%;"></div></div></div>
         </div>
         <div class="h-row">
           <div><div class="h-ticker">PLTR</div><div class="h-name">Palantir</div></div>
-          <div><div class="h-val">€156</div><div class="h-pct green">+4.3%</div></div>
+          <div><div class="h-val">£127.72</div><div class="h-pct c-green">25.7%</div>
+            <div class="h-bar"><div class="h-bar-fill" style="width:77%;"></div></div></div>
         </div>
         <div class="h-row">
-          <div><div class="h-ticker">AMD</div><div class="h-name">AMD · Earnings αύριο</div></div>
-          <div><div class="h-val">€310</div><div class="h-pct green">+1.8%</div></div>
+          <div><div class="h-ticker">ASTS</div><div class="h-name">AST SpaceMobile</div></div>
+          <div><div class="h-val">£55.42</div><div class="h-pct c-green">11.1%</div>
+            <div class="h-bar"><div class="h-bar-fill" style="width:34%;"></div></div></div>
         </div>
         <div class="h-row">
-          <div><div class="h-ticker">MELI</div><div class="h-name">MercadoLibre</div></div>
-          <div><div class="h-val">€125</div><div class="h-pct green">+0.9%</div></div>
+          <div><div class="h-ticker">VUSA</div><div class="h-name">Vanguard S&P500</div></div>
+          <div><div class="h-val">£32.94</div><div class="h-pct c-green">6.6%</div>
+            <div class="h-bar"><div class="h-bar-fill" style="width:20%;background:var(--blue);"></div></div></div>
         </div>
+        <div class="h-row">
+          <div><div class="h-ticker">AMD</div><div class="h-name">AMD</div></div>
+          <div><div class="h-val">£18.79</div><div class="h-pct c-green">3.8%</div>
+            <div class="h-bar"><div class="h-bar-fill" style="width:11%;background:var(--gold);"></div></div></div>
+        </div>
+        <button class="btn" onclick="switchNav('portfolio')">Δες όλες τις θέσεις →</button>
       </div>
     </div>
 
-    <!-- ── PORTFOLIO ───────────────────────────────── -->
+    <!-- ── PORTFOLIO ── -->
     <div class="screen" id="sc-portfolio">
       <div class="card">
-        <div class="stitle">Holdings — Trading 212</div>
-        <div class="h-row">
-          <div><div class="h-ticker">AMD</div><div class="h-name">25% · AI/Tech</div></div>
-          <div><div class="h-val">€310</div><div class="h-pct green">+22.1%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">RKLB</div><div class="h-name">17% · Space</div></div>
-          <div><div class="h-val">€212</div><div class="h-pct green">+41.2%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">VWCE</div><div class="h-name">18% · ETF Core</div></div>
-          <div><div class="h-val">€226</div><div class="h-pct green">+12.0%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">PLTR</div><div class="h-name">13% · AI Gov</div></div>
-          <div><div class="h-val">€156</div><div class="h-pct green">+88.4%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">MELI</div><div class="h-name">10% · Fintech</div></div>
-          <div><div class="h-val">€125</div><div class="h-pct green">+14.8%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">ASTS</div><div class="h-name">7% · Space</div></div>
-          <div><div class="h-val">€93</div><div class="h-pct red">-8.3%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">LSE</div><div class="h-name">5% · Finance</div></div>
-          <div><div class="h-val">€63</div><div class="h-pct green">+5.2%</div></div>
-        </div>
-        <div class="h-row">
-          <div><div class="h-ticker">CASH</div><div class="h-name">Ρευστό</div></div>
-          <div><div class="h-val">€63</div><div class="h-pct" style="color:var(--muted);">5%</div></div>
-        </div>
+        <div class="stitle">Όλες οι θέσεις — £497.37</div>
+        <div id="allHoldings"></div>
       </div>
-
       <div class="sb sb-hold">
-        <div class="sb-title">⚠ Rebalancing Κυριακής</div>
-        <div class="sb-desc">RKLB 17% vs target 10% → Trim €87. VWCE 18% vs target 35% → Αγόρασε €212. AMD εντός target.</div>
+        <div class="sb-title">⚠ REBALANCING ALERT</div>
+        <div class="sb-desc">LITE 33% + PLTR 26% = 59% σε 2 μετοχές. Υπερσυγκέντρωση! Groq AI: trim LITE κατά £50, πρόσθεσε VUSA ή GOOGL για ισορροπία.</div>
       </div>
-      <button class="btn btn-p" onclick="showToast('Rebalancing πλάνο στάλθηκε στο AI agent!')">
-        <i class="ti ti-refresh"></i> Εκτέλεσε Rebalancing
-      </button>
+      <button class="btn btn-p" onclick="showToast('Rebalancing analysis τρέχει στο GitHub Actions!')">Run Rebalancer ↗</button>
     </div>
 
-    <!-- ── SIGNALS (NOTIFICATIONS) ────────────────── -->
+    <!-- ── SIGNALS ── -->
     <div class="screen" id="sc-signals">
       <div class="card">
-        <div class="stitle" style="display:flex;justify-content:space-between;">
-          <span>Live Signals</span><span class="chip cr">3 Urgent</span>
-        </div>
+        <div class="stitle">Live Signals <span class="chip ch-r" style="margin-left:4px;">3 Urgent</span></div>
 
         <div class="notif">
-          <div class="n-icon ni-b"><i class="ti ti-trending-up" style="color:#5ee8a3;"></i></div>
+          <div class="n-icon ni-w"><i class="ti ti-trending-up" style="color:var(--gold);"></i></div>
           <div>
-            <div class="n-title">ΑΓΟΡΑ — RKLB</div>
-            <div class="n-desc">-6% χωρίς bad news. Cathie Wood αύξησε θέση. Dip buying κάτω από $22 — thesis intact.</div>
-            <div class="n-time">12 λεπτά · YouTube Scanner</div>
+            <div class="n-title">PROFIT TAKE — LITE</div>
+            <div class="n-desc">£165 = 33% portfolio. Overweight. Πούλα £50 και διαφοροποίησε. Target reached territory.</div>
+            <div class="n-time">Portfolio Manager · Σήμερα</div>
           </div>
         </div>
 
         <div class="notif">
-          <div class="n-icon ni-w"><i class="ti ti-alert-triangle" style="color:#e8c060;"></i></div>
+          <div class="n-icon ni-b"><i class="ti ti-sparkles" style="color:var(--green);"></i></div>
           <div>
-            <div class="n-title">EARNINGS — AMD αύριο</div>
-            <div class="n-desc">Beat probability 72%. EPS estimate $0.68. Μην πουλάς πριν ανακοίνωση. After Market.</div>
-            <div class="n-time">07:00 · Earnings Agent</div>
+            <div class="n-title">ΑΓΟΡΑ — GOOGL</div>
+            <div class="n-desc">Bill Ackman: "πιο undervalued mega-cap". AI+Cloud+YouTube. Fits στόχο £5,000. Allocation: £50-100.</div>
+            <div class="n-time">Stock Discovery · Σήμερα</div>
           </div>
         </div>
 
         <div class="notif">
-          <div class="n-icon ni-s"><i class="ti ti-trending-down" style="color:#f08080;"></i></div>
+          <div class="n-icon ni-b"><i class="ti ti-trending-up" style="color:var(--green);"></i></div>
           <div>
-            <div class="n-title">ΠΟΥΛΑ — FlyExclusive</div>
-            <div class="n-desc">Δεν ταιριάζει στο Space PIE. Πούλα και βάλε τα σε RKLB ή VWCE.</div>
-            <div class="n-time">Χτες · Risk Agent</div>
+            <div class="n-title">ΑΓΟΡΑ — VUSA (DCA)</div>
+            <div class="n-desc">Ben Felix: core ETF underweight (6.6% vs 35% target). Αγόρασε £50 αυτό το μήνα. Stable growth.</div>
+            <div class="n-time">Portfolio Manager · Σήμερα</div>
           </div>
         </div>
 
         <div class="notif">
-          <div class="n-icon ni-i"><i class="ti ti-file-text" style="color:#80b0f0;"></i></div>
+          <div class="n-icon ni-s"><i class="ti ti-alert-triangle" style="color:var(--red);"></i></div>
+          <div>
+            <div class="n-title">WATCH — PFE, ETSY, BIO</div>
+            <div class="n-desc">3 θέσεις κάτω από £1 — micro positions χωρίς ουσιαστική επιρροή. Εξέτασε πώληση και συγκέντρωση.</div>
+            <div class="n-time">Risk Agent · Σήμερα</div>
+          </div>
+        </div>
+
+        <div class="notif">
+          <div class="n-icon ni-i"><i class="ti ti-file-text" style="color:var(--blue);"></i></div>
           <div>
             <div class="n-title">13F — Berkshire Hathaway</div>
-            <div class="n-desc">Buffett αύξησε θέση σε AAPL +2.1M μετοχές. Αμετάβλητη η θέση σε OXY.</div>
-            <div class="n-time">Πριν 3 ώρες · SEC Tracker</div>
-          </div>
-        </div>
-
-        <div class="notif">
-          <div class="n-icon ni-b"><i class="ti ti-sparkles" style="color:#5ee8a3;"></i></div>
-          <div>
-            <div class="n-title">Tom Nash — Νέο βίντεο</div>
-            <div class="n-desc">MSFT ανέφερε ως "10% υποτιμημένο". DCF target $460. Αγορά κάτω από $415.</div>
-            <div class="n-time">Πριν 4 ώρες · YouTube Scanner</div>
+            <div class="n-desc">Buffett αύξησε AAPL. OXY αμετάβλητη. Νέα θέση σε consumer defensive sector.</div>
+            <div class="n-time">SEC Tracker · Πριν 6 ώρες</div>
           </div>
         </div>
       </div>
-
       <button class="btn btn-p" onclick="requestNotifications()">
         <i class="ti ti-bell"></i> Ενεργοποίησε Push Notifications
       </button>
     </div>
 
-    <!-- ── GURU FEED ───────────────────────────────── -->
-    <div class="screen" id="sc-feed">
-      <div class="feed-item">
-        <div class="feed-head">
-          <div class="av" style="background:rgba(64,128,208,.2);color:#80b0f0;">TN</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;">Tom Nash</div>
-            <div style="font-size:10px;color:var(--muted);">Πριν 4 ώρες · YouTube</div>
-          </div>
-          <span class="chip cg" style="margin-left:auto;">ΑΓΟΡΑ</span>
-        </div>
-        <div class="feed-body">DCF ανάλυση MSFT: Azure AI + Copilot ωθούν τα έσοδα. Fair value $460 vs τρέχουσα $415. "10% margin of safety υπάρχει τώρα."</div>
-        <div class="feed-tags">
-          <span class="chip cg">MSFT</span>
-          <span class="chip cgray">DCF</span>
-          <span class="chip cgray">YouTube</span>
+    <!-- ── PICKS ── -->
+    <div class="screen" id="sc-picks">
+      <div class="card" style="padding:10px 13px;margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;">
+          AI picks βάσει Buffett, Marks, Wood, Nash, Felix, Ackman. Ειδικά για στόχο <strong style="color:var(--green);">£5,000 σε 12 μήνες</strong>.
         </div>
       </div>
 
-      <div class="feed-item">
-        <div class="feed-head">
-          <div class="av" style="background:rgba(192,80,80,.2);color:#f08080;">CW</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;">Cathie Wood</div>
-            <div style="font-size:10px;color:var(--muted);">Πριν 6 ώρες · ARK</div>
-          </div>
-          <span class="chip cg" style="margin-left:auto;">ΑΓΟΡΑ</span>
+      <div class="pick">
+        <div class="pick-head">
+          <div><div class="pick-ticker">GOOGL</div><div class="pick-name">Alphabet Inc</div></div>
+          <span class="chip ch-g">ΑΓΟΡΑ</span>
         </div>
-        <div class="feed-body">ARK αύξησε RKLB κατά 2.3M μετοχές. "Space economy θα φτάσει $1T. Rocket Lab η μόνη εταιρεία με ολοκληρωμένο launch + manufacturing."</div>
-        <div class="feed-tags">
-          <span class="chip cg">RKLB</span>
-          <span class="chip cp">Space</span>
-          <span class="chip cgray">ARK</span>
+        <div class="pick-grid">
+          <div class="pick-stat"><div class="pick-stat-lbl">Αγορά</div><div class="pick-stat-val c-green">£148</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Target</div><div class="pick-stat-val c-gold">£190</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Stop</div><div class="pick-stat-val c-red">£125</div></div>
         </div>
+        <div class="pick-why">Bill Ackman + Tom Nash: "πιο undervalued mega-cap". AI Gemini + YouTube + Cloud = 3 revenue streams. +28% potential σε 18 μήνες.</div>
+        <div class="pick-gurus">
+          <span class="chip ch-dim">Bill Ackman</span><span class="chip ch-dim">Tom Nash</span><span class="chip ch-dim">Cathie Wood</span>
+        </div>
+        <button class="btn" onclick="showToast('GOOGL: Αγορά κάτω από £150. Stop-loss £125. Target £190.')">Λεπτομέρειες ↗</button>
       </div>
 
-      <div class="feed-item">
-        <div class="feed-head">
-          <div class="av" style="background:rgba(184,134,11,.2);color:#e8c060;">WB</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;">Warren Buffett</div>
-            <div style="font-size:10px;color:var(--muted);">Πριν 3 ώρες · SEC 13F</div>
-          </div>
-          <span class="chip cg" style="margin-left:auto;">ΑΓΟΡΑ</span>
+      <div class="pick">
+        <div class="pick-head">
+          <div><div class="pick-ticker">MSFT</div><div class="pick-name">Microsoft</div></div>
+          <span class="chip ch-g">ΑΓΟΡΑ</span>
         </div>
-        <div class="feed-body">Berkshire αύξησε AAPL +2.1M μετοχές. OXY αμετάβλητη. Νέα θέση σε Domino's Pizza — consumer resilience play.</div>
-        <div class="feed-tags">
-          <span class="chip cg">AAPL</span>
-          <span class="chip cgold">OXY</span>
-          <span class="chip cgray">13F</span>
+        <div class="pick-grid">
+          <div class="pick-stat"><div class="pick-stat-lbl">Αγορά</div><div class="pick-stat-val c-green">£312</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Target</div><div class="pick-stat-val c-gold">£390</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Stop</div><div class="pick-stat-val c-red">£265</div></div>
         </div>
+        <div class="pick-why">Tom Nash DCF: 10% υποτιμημένο. Azure AI + Copilot compounding revenue. Ben Felix quality factor A+.</div>
+        <div class="pick-gurus">
+          <span class="chip ch-dim">Tom Nash</span><span class="chip ch-dim">Ben Felix</span>
+        </div>
+        <button class="btn" onclick="showToast('MSFT: Αγορά κάτω από £320. Target £390 σε 18 μήνες.')">Λεπτομέρειες ↗</button>
       </div>
 
-      <div class="feed-item">
-        <div class="feed-head">
-          <div class="av" style="background:rgba(45,155,111,.2);color:#5ee8a3;">HM</div>
-          <div>
-            <div style="font-size:13px;font-weight:600;">Howard Marks</div>
-            <div style="font-size:10px;color:var(--muted);">Σήμερα 09:00 · Memo</div>
-          </div>
-          <span class="chip cgold" style="margin-left:auto;">ΚΡΑΤΑ</span>
+      <div class="pick">
+        <div class="pick-head">
+          <div><div class="pick-ticker">NVDA</div><div class="pick-name">Nvidia</div></div>
+          <span class="chip ch-gold">ΚΡΑΤΑ</span>
         </div>
-        <div class="feed-body">"On Bubble Watch" — Προειδοποίηση για tech valuations. "Όταν όλοι είναι bullish, ο κίνδυνος είναι υψηλότερος." Προτείνει defensive + quality value.</div>
-        <div class="feed-tags">
-          <span class="chip cgold">BRK.B</span>
-          <span class="chip cgold">Defensive</span>
-          <span class="chip cgray">Memo</span>
+        <div class="pick-grid">
+          <div class="pick-stat"><div class="pick-stat-lbl">Αγορά</div><div class="pick-stat-val c-green">£95</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Target</div><div class="pick-stat-val c-gold">£130</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Stop</div><div class="pick-stat-val c-red">£80</div></div>
         </div>
+        <div class="pick-why">Cathie Wood bullish. Plain Bagel: overvalued short term. Μικρή θέση £5 ήδη — κράτα, μην προσθέτεις πάνω από £100.</div>
+        <div class="pick-gurus">
+          <span class="chip ch-dim">Cathie Wood</span><span class="chip ch-dim">Plain Bagel ⚠</span>
+        </div>
+        <button class="btn" onclick="showToast('NVDA: Κράτα. Μην αγοράσεις πάνω από £100. Stop £80.')">Λεπτομέρειες ↗</button>
       </div>
+
+      <div class="pick">
+        <div class="pick-head">
+          <div><div class="pick-ticker">TSM</div><div class="pick-name">TSMC</div></div>
+          <span class="chip ch-g">ΑΓΟΡΑ</span>
+        </div>
+        <div class="pick-grid">
+          <div class="pick-stat"><div class="pick-stat-lbl">Αγορά</div><div class="pick-stat-val c-green">£145</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Target</div><div class="pick-stat-val c-gold">£190</div></div>
+          <div class="pick-stat"><div class="pick-stat-lbl">Stop</div><div class="pick-stat-val c-red">£120</div></div>
+        </div>
+        <div class="pick-why">Cathie Wood + Tom Nash: κάνει τα chips για NVDA, AMD, Apple. AI demand ανεβάζει τιμές. +31% potential.</div>
+        <div class="pick-gurus">
+          <span class="chip ch-dim">Cathie Wood</span><span class="chip ch-dim">Tom Nash</span>
+        </div>
+        <button class="btn" onclick="showToast('TSM: Αγορά κάτω από £150. Stop £120. Geopolitical risk — μικρή θέση.')">Λεπτομέρειες ↗</button>
+      </div>
+
+      <button class="btn btn-p" onclick="showToast('Stock Discovery agent τρέχει κάθε Δευτέρα 06:00 UTC στο GitHub Actions!')">
+        <i class="ti ti-refresh"></i> Ανανέωσε picks (GitHub Actions)
+      </button>
     </div>
 
-    <!-- ── SECTORS ─────────────────────────────────── -->
-    <div class="screen" id="sc-sectors">
-      <div class="sector-card">
-        <div class="sec-hd">
-          <div><div class="sec-name">AI / Τεχνητή Νοημοσύνη</div>
-            <div style="font-size:11px;color:var(--muted);">Cathie Wood · Tom Nash · Ben Felix</div></div>
-          <span class="chip cg">HOT</span>
-        </div>
-        <div class="sec-why">Ο σημαντικότερος megatrend. NVDA, MSFT, GOOGL, AMD, PLTR.</div>
-        <div class="sec-picks">
-          <span class="chip cg">NVDA</span><span class="chip cg">MSFT</span>
-          <span class="chip cg">AMD</span><span class="chip cg">PLTR</span><span class="chip cg">GOOGL</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-hd"><span>Guru consensus</span><span>90/100</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:90%;background:#2d9b6f;"></div></div>
-        </div>
-        <button class="btn" onclick="showToast('AI sector analysis loading...')">Top AI picks ↗</button>
-      </div>
-
-      <div class="sector-card">
-        <div class="sec-hd">
-          <div><div class="sec-name">Semiconductors</div>
-            <div style="font-size:11px;color:var(--muted);">Cathie Wood · Tom Nash · Giannis</div></div>
-          <span class="chip cg">HOT</span>
-        </div>
-        <div class="sec-why">AI χρειάζεται chips. TSMC κάνει τα πάντα. ASML αναντικατάστατη.</div>
-        <div class="sec-picks">
-          <span class="chip cg">TSM</span><span class="chip cg">ASML</span>
-          <span class="chip cg">AMD</span><span class="chip cg">NVDA</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-hd"><span>Guru consensus</span><span>85/100</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:85%;background:#2d9b6f;"></div></div>
-        </div>
-        <button class="btn" onclick="showToast('Semiconductor analysis loading...')">Top Chip picks ↗</button>
-      </div>
-
-      <div class="sector-card">
-        <div class="sec-hd">
-          <div><div class="sec-name">Value Investing</div>
-            <div style="font-size:11px;color:var(--muted);">Buffett · Howard Marks · Ben Felix</div></div>
-          <span class="chip cgold">Stable</span>
-        </div>
-        <div class="sec-why">BRK.B, AAPL, AMZN — χαμηλό ρίσκο, σταθερή απόδοση.</div>
-        <div class="sec-picks">
-          <span class="chip cg">BRK.B</span><span class="chip cg">AAPL</span>
-          <span class="chip cg">AMZN</span><span class="chip cg">GOOGL</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-hd"><span>Guru consensus</span><span>88/100</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:88%;background:#2d9b6f;"></div></div>
-        </div>
-        <button class="btn" onclick="showToast('Value picks loading...')">Top Value picks ↗</button>
-      </div>
-
-      <div class="sector-card">
-        <div class="sec-hd">
-          <div><div class="sec-name">ETFs — Core</div>
-            <div style="font-size:11px;color:var(--muted);">Ben Felix · Plain Bagel</div></div>
-          <span class="chip cb">Base</span>
-        </div>
-        <div class="sec-why">Ben Felix: "80% active funds χάνουν από index." VWCE ως θεμέλιο.</div>
-        <div class="sec-picks">
-          <span class="chip cg">VWCE</span><span class="chip cg">VUAA</span>
-          <span class="chip cg">CSPX</span><span class="chip cgold">QQQ</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-hd"><span>Guru consensus</span><span>95/100</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:95%;background:#2d9b6f;"></div></div>
-        </div>
-        <button class="btn" onclick="showToast('ETF analysis loading...')">Top ETF picks ↗</button>
-      </div>
-
-      <div class="sector-card">
-        <div class="sec-hd">
-          <div><div class="sec-name">Space & Aerospace</div>
-            <div style="font-size:11px;color:var(--muted);">Cathie Wood · Giannis Andreou</div></div>
-          <span class="chip cp">Έχεις</span>
-        </div>
-        <div class="sec-why">10ετής megatrend. $1T economy. Υψηλό ρίσκο, τεράστιο potential.</div>
-        <div class="sec-picks">
-          <span class="chip cg">RKLB</span><span class="chip cgold">ASTS</span>
-          <span class="chip cgold">LUNR</span>
-        </div>
-        <div class="bar-wrap">
-          <div class="bar-hd"><span>Guru consensus</span><span>72/100</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:72%;background:#b88020;"></div></div>
-        </div>
-        <button class="btn" onclick="showToast('Space analysis loading...')">Top Space picks ↗</button>
-      </div>
-    </div>
-
-    <!-- ── GOAL ───────────────────────────────────── -->
+    <!-- ── GOAL ── -->
     <div class="screen" id="sc-goal">
       <div class="card">
-        <div class="stitle">Ορίσε τον στόχο σου</div>
-        <label class="inp-lbl">Έχω τώρα (€)</label>
-        <input class="inp" type="number" id="g-start" value="1247" oninput="calcGoal()"/>
-        <label class="inp-lbl">Θέλω να φτάσω (€)</label>
-        <input class="inp" type="number" id="g-goal" value="3000" oninput="calcGoal()"/>
-        <label class="inp-lbl">Προσθέτω κάθε μήνα (€)</label>
-        <input class="inp" type="number" id="g-monthly" value="100" oninput="calcGoal()"/>
-        <label class="inp-lbl">Ανοχή ρίσκου</label>
+        <div class="stitle">Ρύθμισε τον στόχο σου</div>
+        <label class="inp-lbl">Έχω τώρα (£)</label>
+        <input class="inp" type="number" id="g-start" value="497" oninput="calcGoal()"/>
+        <label class="inp-lbl">Θέλω να φτάσω (£)</label>
+        <input class="inp" type="number" id="g-goal" value="5000" oninput="calcGoal()"/>
+        <label class="inp-lbl">Προσθέτω κάθε μήνα (£)</label>
+        <input class="inp" type="number" id="g-monthly" value="200" oninput="calcGoal()"/>
+        <label class="inp-lbl">Μήνες</label>
+        <input class="inp" type="number" id="g-months" value="12" oninput="calcGoal()"/>
+        <label class="inp-lbl">Risk Level</label>
         <select class="inp" id="g-risk" onchange="calcGoal()">
-          <option value="8">Συντηρητικό (8%/χρόνο)</option>
-          <option value="15" selected>Μέτριο (15%/χρόνο)</option>
+          <option value="8">Conservative (8%/χρόνο)</option>
+          <option value="15" selected>Moderate (15%/χρόνο)</option>
           <option value="30">Aggressive (30%/χρόνο)</option>
-          <option value="50">Πολύ Aggressive (50%/χρόνο)</option>
+          <option value="50">Very Aggressive (50%/χρόνο)</option>
         </select>
       </div>
 
@@ -592,17 +465,8 @@ select.inp option{background:var(--surf);}
       <div id="goalSignal"></div>
 
       <div class="card">
-        <div class="stitle">Πρόοδος</div>
-        <div class="prog-wrap">
-          <div class="prog-hd">
-            <span id="gProgLabel">€1,247 → €3,000</span>
-            <span id="gProgPct" style="font-weight:600;color:var(--gm);">42%</span>
-          </div>
-          <div class="prog-track">
-            <div class="prog-fill" id="gProgFill" style="width:42%;"></div>
-          </div>
-        </div>
-        <div id="gTimeline" style="margin-top:8px;"></div>
+        <div class="stitle">Πρόβλεψη</div>
+        <div id="goalBars"></div>
       </div>
 
       <div class="card" id="guruGoalCard">
@@ -610,13 +474,22 @@ select.inp option{background:var(--surf);}
         <div id="guruGoalBars"></div>
       </div>
 
-      <button class="btn btn-p" id="goalAIBtn">AI πλάνο ↗</button>
+      <div class="card">
+        <div class="stitle">Για να αλλάξεις στόχο μόνιμα</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6;">
+          1. Πήγαινε στο GitHub → <strong style="color:var(--txt);">settings.json</strong><br/>
+          2. Άλλαξε <code style="color:var(--green);">target_gbp</code> και <code style="color:var(--green);">months</code><br/>
+          3. Commit → οι agents τρέχουν με τον νέο στόχο!
+        </div>
+      </div>
+
+      <button class="btn btn-p" id="goalAIBtn">AI Πλάνο για τον στόχο ↗</button>
     </div>
 
   </div><!-- /content -->
 
-  <!-- Bottom navigation -->
-  <div class="bottom-nav">
+  <!-- Bottom nav -->
+  <div class="nav">
     <button class="nav-btn on" id="nav-home" onclick="switchNav('home')">
       <i class="ti ti-home"></i>Home
     </button>
@@ -626,199 +499,177 @@ select.inp option{background:var(--surf);}
     <button class="nav-btn" id="nav-signals" onclick="switchNav('signals')">
       <i class="ti ti-bell"></i>Signals<span class="nav-badge">3</span>
     </button>
-    <button class="nav-btn" id="nav-feed" onclick="switchNav('feed')">
-      <i class="ti ti-rss"></i>Feed
-    </button>
-    <button class="nav-btn" id="nav-sectors" onclick="switchNav('sectors')">
-      <i class="ti ti-layout-grid"></i>Sectors
+    <button class="nav-btn" id="nav-picks" onclick="switchNav('picks')">
+      <i class="ti ti-trending-up"></i>Picks
     </button>
     <button class="nav-btn" id="nav-goal" onclick="switchNav('goal')">
       <i class="ti ti-target"></i>Στόχος
     </button>
   </div>
-</div><!-- /app -->
+</div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK for push notifications -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
-
 <script>
-// ── Navigation ────────────────────────────────────
-function switchNav(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
-  document.getElementById('sc-' + name).classList.add('on');
-  document.getElementById('nav-' + name).classList.add('on');
-  // scroll top
-  document.querySelector('.content').scrollTop = 0;
+// All holdings data
+const HOLDINGS = [
+  {t:"ETSY", n:"Etsy",           v:0.59},
+  {t:"PFE",  n:"Pfizer",         v:0.59},
+  {t:"ABNB", n:"Airbnb",         v:0.97},
+  {t:"BBAI", n:"BigBear.ai",     v:1.21},
+  {t:"BIO",  n:"Biotest",        v:1.38},
+  {t:"AAISP",n:"AAISP",          v:1.41},
+  {t:"IHG",  n:"IHG Hotels",     v:1.78},
+  {t:"EBAY", n:"eBay",           v:1.91},
+  {t:"SHEL", n:"Shell",          v:1.95},
+  {t:"BRAI", n:"Brain Sci",      v:2.11},
+  {t:"META", n:"Meta",           v:2.61},
+  {t:"AZN",  n:"AstraZeneca",    v:2.93},
+  {t:"BP",   n:"BP",             v:3.30},
+  {t:"NVDA", n:"Nvidia",         v:5.07},
+  {t:"DDOG", n:"Datadog",        v:5.19},
+  {t:"RIO",  n:"Rio Tinto",      v:5.52},
+  {t:"BARC", n:"Barclays",       v:5.53},
+  {t:"TEVA", n:"Teva Pharma",    v:6.41},
+  {t:"AGX",  n:"Argan Inc",      v:8.65},
+  {t:"STRL", n:"Sterling Infra", v:10.55},
+  {t:"NBIS", n:"Nebius Group",   v:11.63},
+  {t:"GOOGL",n:"Alphabet",       v:16.10},
+  {t:"AMD",  n:"AMD",            v:18.79},
+  {t:"VUSA", n:"Vanguard S&P500",v:32.94},
+  {t:"ASTS", n:"AST SpaceMobile",v:55.42},
+  {t:"PLTR", n:"Palantir",       v:127.72},
+  {t:"LITE", n:"Lumentum",       v:165.11},
+];
+const TOTAL = HOLDINGS.reduce((s,h)=>s+h.v,0);
+
+// Render all holdings
+function renderHoldings(){
+  const sorted = [...HOLDINGS].sort((a,b)=>b.v-a.v);
+  document.getElementById('allHoldings').innerHTML = sorted.map(h=>{
+    const pct = (h.v/TOTAL*100);
+    const w   = Math.min(100, pct/33.2*100);
+    const col = pct>20?'var(--gold)':pct>5?'var(--green)':'var(--blue)';
+    return `<div class="h-row">
+      <div><div class="h-ticker">${h.t}</div><div class="h-name">${h.n}</div></div>
+      <div>
+        <div class="h-val">£${h.v.toFixed(2)}</div>
+        <div class="h-pct" style="color:${pct>20?'var(--gold)':'var(--green)'};">${pct.toFixed(1)}%</div>
+        <div class="h-bar"><div class="h-bar-fill" style="width:${w}%;background:${col};"></div></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-// ── Toast ─────────────────────────────────────────
-function showToast(msg, duration = 2500) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+// Navigation
+function switchNav(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('sc-'+name).classList.add('on');
+  document.getElementById('nav-'+name).classList.add('on');
+  document.querySelector('.content').scrollTop=0;
 }
 
-// ── PWA Install (Android) ─────────────────────────
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
+// Toast
+function showToast(msg,dur=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+}
+
+// PWA Install
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault(); deferredPrompt=e;
   document.getElementById('installBanner').classList.add('show');
 });
-async function installApp() {
-  if (!deferredPrompt) {
-    showToast('Chrome → ⋮ → "Εγκατάσταση εφαρμογής"');
-    return;
-  }
+async function installApp(){
+  if(!deferredPrompt){showToast('Chrome ⋮ → Εγκατάσταση εφαρμογής');return;}
   deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === 'accepted') {
-    showToast('Εγκαταστάθηκε! ✓');
-    document.getElementById('installBanner').classList.remove('show');
-  }
-  deferredPrompt = null;
+  const{outcome}=await deferredPrompt.userChoice;
+  if(outcome==='accepted'){showToast('Εγκαταστάθηκε! ✓');document.getElementById('installBanner').classList.remove('show');}
+  deferredPrompt=null;
 }
-window.addEventListener('appinstalled', () => {
-  document.getElementById('installBanner').classList.remove('show');
-});
+window.addEventListener('appinstalled',()=>document.getElementById('installBanner').classList.remove('show'));
 
-// ── Service Worker registration ───────────────────
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').then(reg => {
-    console.log('[SW] Registered:', reg.scope);
-  }).catch(err => console.error('[SW] Error:', err));
-}
+// Service Worker
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
-// ── Push Notifications ────────────────────────────
-// ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ Firebase keys εδώ:
-const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID",
-};
-const VAPID_KEY = "YOUR_VAPID_KEY";   // Firebase → Project Settings → Cloud Messaging
-
-let messaging = null;
-try {
-  firebase.initializeApp(FIREBASE_CONFIG);
-  messaging = firebase.messaging();
-} catch(e) { console.log('[FCM] Config not set yet'); }
-
-async function requestNotifications() {
-  if (!messaging) {
-    showToast('Βάλε πρώτα τα Firebase keys στο index.html');
-    return;
-  }
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      showToast('Δεν δόθηκε άδεια notifications');
-      return;
-    }
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
-    console.log('[FCM] Token:', token);
-    // Αποθήκευσε το token στο Supabase
-    showToast('Push notifications ενεργοποιήθηκαν! ✓');
-  } catch(e) {
-    showToast('Σφάλμα: ' + e.message);
-  }
+// Push notifications
+async function requestNotifications(){
+  if(!('Notification' in window)){showToast('Ο browser δεν υποστηρίζει notifications');return;}
+  const perm=await Notification.requestPermission();
+  if(perm==='granted') showToast('Push notifications ενεργοποιήθηκαν! ✓');
+  else showToast('Δεν δόθηκε άδεια');
 }
 
-function showNotifPrompt() {
-  switchNav('signals');
-}
+// Goal calculator
+function calcGoal(){
+  const start  = parseFloat(document.getElementById('g-start').value)||497;
+  const goal   = parseFloat(document.getElementById('g-goal').value)||5000;
+  const monthly= parseFloat(document.getElementById('g-monthly').value)||200;
+  const months = parseInt(document.getElementById('g-months').value)||12;
+  const rate   = parseFloat(document.getElementById('g-risk').value)||15;
+  const mr     = Math.pow(1+rate/100,1/12)-1;
+  const pct    = Math.round(start/goal*100);
+  const proj   = start*Math.pow(1+mr,months)+monthly*(Math.pow(1+mr,months)-1)/mr;
+  const gap    = goal-proj;
+  const needed_ret = ((goal/start)-1)*100;
+  const col    = proj>=goal?'var(--green)':proj>=goal*0.7?'var(--gold)':'var(--red)';
 
-// ── Goal Calculator ───────────────────────────────
-function calcGoal() {
-  const start   = parseFloat(document.getElementById('g-start').value)   || 1247;
-  const goal    = parseFloat(document.getElementById('g-goal').value)    || 3000;
-  const monthly = parseFloat(document.getElementById('g-monthly').value) || 100;
-  const rate    = parseFloat(document.getElementById('g-risk').value)    || 15;
+  document.getElementById('goalMetrics').innerHTML=`
+    <div class="met"><div class="met-lbl">Προβολή</div><div class="met-val" style="color:${col};">£${Math.round(proj).toLocaleString()}</div></div>
+    <div class="met"><div class="met-lbl">Gap</div><div class="met-val" style="color:${gap>0?'var(--red)':'var(--green)'};">${gap>0?'-':'+'} £${Math.abs(Math.round(gap)).toLocaleString()}</div></div>
+    <div class="met"><div class="met-lbl">DCA total</div><div class="met-val c-blue">£${(monthly*months).toLocaleString()}</div></div>
+    <div class="met"><div class="met-lbl">Return needed</div><div class="met-val" style="color:${needed_ret>100?'var(--red)':'var(--gold)'};">+${Math.round(needed_ret)}%</div></div>`;
 
-  const mr = Math.pow(1 + rate/100, 1/12) - 1;
-  let val = start, months = 0;
-  while (val < goal && months < 360) {
-    val = val * (1 + mr) + monthly;
-    months++;
-  }
-  const yrs  = (months / 12).toFixed(1);
-  const pct  = Math.round(start / goal * 100);
-  const ti   = Math.round(start + monthly * months);
-  const prof = Math.round(goal - ti);
-  const color = months <= 24 ? '#5ee8a3' : months <= 60 ? '#e8c060' : '#f08080';
-
-  document.getElementById('goalMetrics').innerHTML = `
-    <div class="met"><div class="met-lbl">Χρόνος στόχου</div>
-      <div class="met-val" style="color:${color};">${months > 120 ? '10+ χρ' : months > 24 ? yrs+' χρ' : months+' μήνες'}</div></div>
-    <div class="met"><div class="met-lbl">Μηνιαία απόδοση</div>
-      <div class="met-val green">${(mr*100).toFixed(1)}%</div></div>
-    <div class="met"><div class="met-lbl">Σύνολο επένδυσης</div>
-      <div class="met-val blue">€${ti.toLocaleString()}</div></div>
-    <div class="met"><div class="met-lbl">Κέρδος αγοράς</div>
-      <div class="met-val green">€${Math.max(0,prof).toLocaleString()}</div></div>`;
-
-  const ok = months <= 36;
-  document.getElementById('goalSignal').innerHTML = `
-    <div class="sb ${ok ? 'sb-buy' : months<=60 ? 'sb-hold' : 'sb-sell'}">
-      <div class="sb-title">${ok ? '✓ Εφικτός στόχος' : months<=60 ? '⚠ Φιλόδοξος' : '⚠ Πολύ aggressive'}</div>
-      <div class="sb-desc">${months} μήνες με ${rate}%/χρόνο + €${monthly}/μήνα.
-        ${ok ? 'Gurus λένε: ξεκίνα ΑΜΕΣΩΣ.' : 'Σκέψου να αυξήσεις μηνιαία συνεισφορά.'}</div>
+  const ok = proj>=goal*0.9;
+  document.getElementById('goalSignal').innerHTML=`
+    <div class="sb ${ok?'sb-buy':proj>=goal*0.6?'sb-hold':'sb-sell'}">
+      <div class="sb-title">${ok?'✓ Εφικτός στόχος':'⚠ '+(proj>=goal*0.6?'Φιλόδοξος':'Πολύ Aggressive')}</div>
+      <div class="sb-desc">Με £${monthly}/μήνα και ${rate}%/χρόνο → £${Math.round(proj).toLocaleString()} σε ${months} μήνες. ${ok?'Gurus: ξεκίνα ΑΜΕΣΩΣ.':'Σκέψου να αυξήσεις μηνιαία ή να παρατείνεις τον ορίζοντα.'}</div>
     </div>`;
 
-  document.getElementById('gProgLabel').textContent = `€${start.toLocaleString()} → €${goal.toLocaleString()}`;
-  document.getElementById('gProgPct').textContent  = pct + '%';
-  document.getElementById('gProgFill').style.width = Math.min(100,pct) + '%';
-  document.getElementById('gProgFill').style.background = color;
-
-  // Milestones
-  const milestones = [];
-  let v2 = start;
-  for (let m = 1; m <= Math.min(months, 36); m++) {
-    v2 = v2 * (1+mr) + monthly;
-    if (m % Math.max(1,Math.floor(months/4)) === 0 || m === months) {
-      milestones.push({m, v: Math.round(v2)});
-    }
+  // Milestone bars
+  const bars=[];
+  let v2=start;
+  const step=Math.max(1,Math.floor(months/4));
+  for(let m=step;m<=months;m+=step){
+    v2=start*Math.pow(1+mr,m)+monthly*(Math.pow(1+mr,m)-1)/mr;
+    bars.push({m,v:Math.round(v2)});
   }
-  document.getElementById('gTimeline').innerHTML = milestones.map(p => `
-    <div class="bar-wrap">
-      <div class="bar-hd"><span>Μήνας ${p.m}</span>
-        <span style="font-weight:600;color:${color};">€${p.v.toLocaleString()}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Math.round(p.v/goal*100))}%;background:${color};"></div></div>
-    </div>`).join('');
-
-  // Guru bars
-  const gurus = [
-    {n:'Warren Buffett', s: Math.max(20, 95-months*0.5)},
-    {n:'Ben Felix',      s: Math.max(20, 90-months*0.4)},
-    {n:'Howard Marks',   s: Math.max(20, 88-months*0.4)},
-    {n:'Tom Nash',       s: Math.max(30, 75+months*0.1)},
-    {n:'Cathie Wood',    s: Math.max(40, 65+months*0.15)},
-  ];
-  document.getElementById('guruGoalBars').innerHTML = gurus.map(g => {
-    const v   = Math.round(g.s);
-    const col = v>=70 ? '#2d9b6f' : v>=50 ? '#b88020' : '#c05050';
-    const lbl = v>=70 ? 'Εγκρίνει' : v>=50 ? 'Επιφυλακτικός' : 'Αντιτίθεται';
+  document.getElementById('goalBars').innerHTML=bars.map(b=>{
+    const pct2=Math.min(100,Math.round(b.v/goal*100));
+    const c=pct2>=90?'var(--green)':pct2>=60?'var(--gold)':'var(--red)';
     return `<div class="bar-wrap">
-      <div class="bar-hd"><span>${g.n}</span>
-        <span style="color:${col};font-weight:600;">${lbl}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${v}%;background:${col};"></div></div>
+      <div class="bar-hd"><span style="color:var(--muted);">Μήνας ${b.m}</span><span style="color:${c};font-weight:600;">£${b.v.toLocaleString()}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct2}%;background:${c};"></div></div>
     </div>`;
   }).join('');
 
-  document.getElementById('goalAIBtn').onclick = () => {
-    showToast(`Στέλνω στο AI: €${Math.round(start)} → €${Math.round(goal)} σε ${months} μήνες...`);
-  };
+  // Guru bars
+  const gurus=[
+    {n:'Warren Buffett',s:Math.max(10,90-needed_ret*0.5)},
+    {n:'Ben Felix',s:Math.max(10,88-needed_ret*0.4)},
+    {n:'Howard Marks',s:Math.max(10,85-needed_ret*0.45)},
+    {n:'Tom Nash',s:Math.max(20,72+needed_ret*0.05)},
+    {n:'Cathie Wood',s:Math.max(30,60+needed_ret*0.08)},
+  ];
+  document.getElementById('guruGoalBars').innerHTML=gurus.map(g=>{
+    const v=Math.min(95,Math.round(g.s));
+    const c=v>=70?'var(--green)':v>=50?'var(--gold)':'var(--red)';
+    const l=v>=70?'Εγκρίνει':v>=50?'Επιφυλακτικός':'Αντιτίθεται';
+    return `<div class="bar-wrap">
+      <div class="bar-hd"><span>${g.n}</span><span style="color:${c};font-weight:600;">${l}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${v}%;background:${c};"></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('goalAIBtn').onclick=()=>showToast(`Στέλνω στο AI: £${Math.round(start)} → £${Math.round(goal)} σε ${months} μήνες...`);
 }
 
 // Init
+renderHoldings();
 calcGoal();
 </script>
 </body>
