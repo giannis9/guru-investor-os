@@ -1,0 +1,99 @@
+name: Guru Investor OS
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+    - cron: '0 7 * * *'
+    - cron: '0 8 * * 0'
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      module:
+        type: choice
+        default: rebalancer
+        options: [rebalancer, sec, earnings, youtube]
+
+jobs:
+  rebalancer:
+    name: Rebalancer (Groq AI)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 8 * * 0')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'rebalancer')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python backend/rebalancer/rebalancer.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+
+  sec:
+    name: SEC 13F Tracker
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 */6')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'sec')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
+          restore-keys: sec-
+      - run: python backend/sec-tracker/tracker.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
+
+  earnings:
+    name: Earnings Preview
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 7 * * *')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'earnings')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python backend/earnings-preview/earnings.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+
+  youtube:
+    name: YouTube Scanner
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '*/15')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.module == 'youtube')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp youtube-transcript-api
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/yt_seen.json
+          key: yt-${{ github.run_id }}
+          restore-keys: yt-
+      - run: python backend/youtube-scanner/scanner.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/yt_seen.json
+          key: yt-${{ github.run_id }}
