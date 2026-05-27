@@ -1,0 +1,156 @@
+"""
+SEC 13F Tracker — κάθε 6 ώρες (GitHub Actions, δωρεάν)
+Παρακολουθεί: Berkshire, ARK, Pershing Square
+SEC EDGAR API: εντελώς δωρεάν, χωρίς key
+"""
+import os, sys, json, asyncio, aiohttp
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from shared.config    import SEC_FILERS
+from shared.notifier  import buy, sell, info
+from shared.ai_client import ask_ai
+
+EDGAR   = "https://data.sec.gov"
+SEC_HDR = {"User-Agent": "GuruInvestorOS alerts@youremail.com"}
+
+
+async def get_filings(session, cik: str, fund: str) -> list:
+    url = f"{EDGAR}/submissions/CIK{cik.zfill(10)}.json"
+    async with session.get(url, headers=SEC_HDR) as r:
+        if r.status != 200: return []
+        d = await r.json()
+    rec   = d.get("filings", {}).get("recent", {})
+    forms = rec.get("form", [])
+    accs  = rec.get("accessionNumber", [])
+    dates = rec.get("filingDate", [])
+    out   = []
+    for i, f in enumerate(forms):
+        if f in ("13F-HR", "13F-HR/A"):
+            out.append({"acc": accs[i].replace("-",""), "acc_raw": accs[i],
+                        "date": dates[i], "cik": cik.zfill(10)})
+        if len(out) >= 2: break
+    return out
+
+
+async def get_holdings(session, filing: dict) -> list:
+    cik  = filing["cik"]
+    acc  = filing["acc"]
+    base = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc}/"
+    async with session.get(base + "index.json", headers=SEC_HDR) as r:
+        if r.status != 200: return []
+        idx = await r.json()
+
+    xml_file = next((i["name"] for i in idx.get("directory",{}).get("item",[])
+                     if "infotable" in i.get("name","").lower()
+                     and i["name"].endswith(".xml")), None)
+    if not xml_file: return []
+
+    async with session.get(base + xml_file, headers=SEC_HDR) as r:
+        if r.status != 200: return []
+        xml = await r.text()
+
+    holdings = []
+    try: root = ET.fromstring(xml)
+    except: return []
+
+    for entry in root.iter():
+        tag = entry.tag.split("}")[-1] if "}" in entry.tag else entry.tag
+        if tag != "infoTable": continue
+        def fv(t):
+            for c in entry:
+                ct = c.tag.split("}")[-1] if "}" in c.tag else c.tag
+                if ct == t: return (c.text or "").strip()
+            return ""
+        company = fv("nameOfIssuer")
+        value   = fv("value")
+        cusip   = fv("cusip")
+        if company and value:
+            v = int(value.replace(",","")) if value.replace(",","").isdigit() else 0
+            holdings.append({"company": company, "cusip": cusip, "value_k": v})
+
+    return sorted(holdings, key=lambda x: x["value_k"], reverse=True)
+
+
+def compare(curr: list, prev: list) -> dict:
+    pm = {h["cusip"]: h for h in prev if h["cusip"]}
+    cm = {h["cusip"]: h for h in curr if h["cusip"]}
+    changes = {"new": [], "increased": [], "exited": []}
+    for cusip, c in cm.items():
+        if cusip not in pm:
+            changes["new"].append(c)
+        else:
+            pv, cv = pm[cusip]["value_k"], c["value_k"]
+            pct = ((cv - pv) / pv * 100) if pv else 100
+            if pct > 10: changes["increased"].append({**c, "pct": round(pct,1)})
+    for cusip, p in pm.items():
+        if cusip not in cm: changes["exited"].append(p)
+    return changes
+
+
+async def analyze(session, fund: str, changes: dict, date: str) -> str:
+    if not any(changes.values()): return "Δεν βρέθηκαν σημαντικές αλλαγές."
+    prompt = f"""Αναλύσε αλλαγές χαρτοφυλακίου {fund} (13F {date}).
+Νέα: {json.dumps(changes['new'][:5], ensure_ascii=False)}
+Αυξήσεις: {json.dumps(changes['increased'][:5], ensure_ascii=False)}
+Πωλήσεις: {json.dumps(changes['exited'][:5], ensure_ascii=False)}
+3 προτάσεις Ελληνικά: τι κάνει, σημαντικότερη κίνηση, τι σημαίνει για εμένα."""
+    return await ask_ai(session, prompt, max_tokens=300)
+
+
+def load_last(fund: str) -> dict:
+    try:
+        with open(f"/tmp/sec_{fund.replace(' ','_')}.json") as f: return json.load(f)
+    except: return {}
+
+def save_last(fund: str, filing: dict, holdings: list):
+    with open(f"/tmp/sec_{fund.replace(' ','_')}.json", "w") as f:
+        json.dump({"acc": filing["acc"], "date": filing["date"],
+                   "holdings": holdings[:100]}, f)
+
+
+async def main():
+    print(f"[{datetime.utcnow().isoformat()}] SEC 13F Tracker starting...")
+    async with aiohttp.ClientSession() as session:
+        for fund, cik in SEC_FILERS.items():
+            print(f"  {fund}...")
+            filings = await get_filings(session, cik, fund)
+            if not filings: continue
+            latest = filings[0]
+            last   = load_last(fund)
+
+            if last.get("acc") == latest["acc"]:
+                print(f"  No new filing."); continue
+
+            print(f"  NEW FILING: {latest['date']}")
+            curr = await get_holdings(session, latest)
+            print(f"  {len(curr)} holdings")
+
+            if last.get("holdings"):
+                changes  = compare(curr, last["holdings"])
+                analysis = await analyze(session, fund, changes, latest["date"])
+                for pos in changes["new"][:3]:
+                    val_m = round(pos["value_k"]/1000, 1)
+                    await buy(pos["company"][:25],
+                              f"{fund} αγόρασε νέα θέση ${val_m}M. {analysis[:100]}",
+                              source=f"SEC 13F {latest['date']}")
+                    await asyncio.sleep(1)
+                for pos in changes["exited"][:2]:
+                    await sell(pos["company"][:25],
+                               f"{fund} έκλεισε θέση. {analysis[:80]}",
+                               urgency="medium")
+                    await asyncio.sleep(1)
+                await info(f"13F — {fund}", analysis,
+                           {"fund": fund, "date": latest["date"]})
+            else:
+                await info(f"13F Baseline — {fund}",
+                           f"Φόρτωσα {len(curr)} holdings. Παρακολουθώ αλλαγές.",
+                           {"fund": fund})
+
+            save_last(fund, latest, curr)
+            await asyncio.sleep(3)
+
+    print("SEC Tracker done.")
+
+if __name__ == "__main__": asyncio.run(main())
