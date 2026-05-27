@@ -1,54 +1,110 @@
-"""Firebase FCM — Android push notifications (δωρεάν)"""
-import os, asyncio, aiohttp
-from datetime import datetime
+name: Guru Investor OS
 
-FCM_KEY   = os.getenv("FCM_SERVER_KEY", "")
-FCM_TOPIC = "guru_alerts"   # όλοι subscribe εδώ
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # YouTube — κάθε 15 λεπτά
+    - cron: '0 7 * * *'      # Earnings — κάθε μέρα 07:00
+    - cron: '0 8 * * 0'      # Rebalancer — κάθε Κυριακή
+    - cron: '0 */6 * * *'    # SEC 13F — κάθε 6 ώρες
+  workflow_dispatch:
+    inputs:
+      module:
+        type: choice
+        default: youtube
+        options: [youtube, sec, rebalancer, earnings, all]
 
+env:
+  PYTHONUNBUFFERED: "1"
 
-async def _send(title: str, body: str, data: dict, urgency: str = "medium") -> bool:
-    if not FCM_KEY:
-        print(f"[NOTIFY] [{urgency.upper()}] {title}: {body}")
-        return True
+jobs:
 
-    high = urgency in ("critical", "high")
-    color = {"critical": "#c05050", "high": "#2d9b6f",
-             "medium": "#b8860b"}.get(urgency, "#888888")
+  youtube:
+    name: YouTube Scanner
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '*/15')) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["youtube","all"]'), github.event.inputs.module))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install aiohttp youtube-transcript-api
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/yt_seen.json
+          key: yt-${{ github.run_id }}
+          restore-keys: yt-
+      - run: python backend/youtube-scanner/scanner.py
+        env:
+          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          FCM_SERVER_KEY:  ${{ secrets.FCM_SERVER_KEY }}
+          SUPABASE_URL:    ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:    ${{ secrets.SUPABASE_KEY }}
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/yt_seen.json
+          key: yt-${{ github.run_id }}
 
-    payload = {
-        "to": f"/topics/{FCM_TOPIC}",
-        "priority": "high" if high else "normal",
-        "notification": {"title": title, "body": body, "sound": "default"},
-        "data": {**data, "urgency": urgency,
-                 "ts": datetime.utcnow().isoformat()},
-        "android": {
-            "priority": "high" if high else "normal",
-            "notification": {"color": color, "channel_id": "guru_alerts",
-                             "click_action": "OPEN_ALERT"},
-        },
-    }
-    headers = {"Authorization": f"key={FCM_KEY}",
-               "Content-Type": "application/json"}
+  sec:
+    name: SEC 13F Tracker
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 */6')) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["sec","all"]'), github.event.inputs.module))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install aiohttp
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
+          restore-keys: sec-
+      - run: python backend/sec-tracker/tracker.py
+        env:
+          GROQ_API_KEY:   ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/sec_*.json
+          key: sec-${{ github.run_id }}
 
-    async with aiohttp.ClientSession() as s:
-        async with s.post("https://fcm.googleapis.com/fcm/send",
-                          headers=headers, json=payload) as r:
-            result = await r.json()
-            ok = result.get("success", 0) > 0
-            if not ok: print(f"[FCM] Error: {result}")
-            return ok
+  rebalancer:
+    name: Sunday Rebalancer
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 8 * * 0')) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["rebalancer","all"]'), github.event.inputs.module))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install aiohttp
+      - run: python backend/rebalancer/rebalancer.py
+        env:
+          GROQ_API_KEY:        ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          TRADING212_API_KEY:  ${{ secrets.TRADING212_API_KEY }}
+          FCM_SERVER_KEY:      ${{ secrets.FCM_SERVER_KEY }}
 
-
-async def buy(ticker: str, reason: str, source: str = "", potential: str = ""):
-    body = reason + (f" | Potential: {potential}" if potential else "")
-    return await _send(f"ΑΓΟΡΑ — {ticker}", body,
-                       {"type": "BUY", "ticker": ticker, "source": source},
-                       urgency="high")
-
-async def sell(ticker: str, reason: str, urgency: str = "critical"):
-    return await _send(f"ΠΟΥΛΑ — {ticker}", reason,
-                       {"type": "SELL", "ticker": ticker},
-                       urgency=urgency)
-
-async def info(title: str, body: str, data: dict = {}):
-    return await _send(title, body, {"type": "INFO", **data}, urgency="medium")
+  earnings:
+    name: Daily Earnings Preview
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && contains(github.event.schedule, '0 7 * * *')) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["earnings","all"]'), github.event.inputs.module))
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - run: pip install aiohttp
+      - run: python backend/earnings-preview/earnings.py
+        env:
+          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY:  ${{ secrets.FCM_SERVER_KEY }}

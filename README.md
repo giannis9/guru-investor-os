@@ -1,44 +1,54 @@
-"""Config — βάλε τα keys στα GitHub Secrets"""
-import os
+"""Firebase FCM — Android push notifications (δωρεάν)"""
+import os, asyncio, aiohttp
+from datetime import datetime
 
-# AI (δωρεάν)
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY",  "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+FCM_KEY   = os.getenv("FCM_SERVER_KEY", "")
+FCM_TOPIC = "guru_alerts"   # όλοι subscribe εδώ
 
-# Market data (δωρεάν)
-YOUTUBE_API_KEY    = os.getenv("YOUTUBE_API_KEY",    "")
-FINNHUB_API_KEY    = os.getenv("FINNHUB_API_KEY",    "")
-TRADING212_API_KEY = os.getenv("TRADING212_API_KEY", "")
 
-# Notifications (δωρεάν)
-FCM_SERVER_KEY = os.getenv("FCM_SERVER_KEY", "")
+async def _send(title: str, body: str, data: dict, urgency: str = "medium") -> bool:
+    if not FCM_KEY:
+        print(f"[NOTIFY] [{urgency.upper()}] {title}: {body}")
+        return True
 
-# Database (δωρεάν)
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+    high = urgency in ("critical", "high")
+    color = {"critical": "#c05050", "high": "#2d9b6f",
+             "medium": "#b8860b"}.get(urgency, "#888888")
 
-# Gurus — YouTube Channel IDs
-GURU_CHANNELS = {
-    "Ben Felix":       "UC3Pfbn2JkHRRL7B-DNRMIpg",
-    "The Plain Bagel": "UCfdmXVvNjkIkBHFkGMWPqYg",
-    "Tom Nash":        "UCo9oq7LDkCjANi9G8HE5dRw",
-    "Andrei Jikh":     "UCGy7SkBjcIAgTiwkXEtPnYg",
-    "Giannis Andreou": "UCxxxxxxxxxxxxxxxxxxxxxxx",  # ← βάλε πραγματικό ID
-}
+    payload = {
+        "to": f"/topics/{FCM_TOPIC}",
+        "priority": "high" if high else "normal",
+        "notification": {"title": title, "body": body, "sound": "default"},
+        "data": {**data, "urgency": urgency,
+                 "ts": datetime.utcnow().isoformat()},
+        "android": {
+            "priority": "high" if high else "normal",
+            "notification": {"color": color, "channel_id": "guru_alerts",
+                             "click_action": "OPEN_ALERT"},
+        },
+    }
+    headers = {"Authorization": f"key={FCM_KEY}",
+               "Content-Type": "application/json"}
 
-# SEC 13F filers (CIK)
-SEC_FILERS = {
-    "Berkshire Hathaway": "0001067983",
-    "ARK Invest":         "0001697748",
-    "Pershing Square":    "0001336528",
-}
+    async with aiohttp.ClientSession() as s:
+        async with s.post("https://fcm.googleapis.com/fcm/send",
+                          headers=headers, json=payload) as r:
+            result = await r.json()
+            ok = result.get("success", 0) > 0
+            if not ok: print(f"[FCM] Error: {result}")
+            return ok
 
-# Το portfolio σου — target allocation
-TARGET_ALLOCATION = {
-    "VWCE": 0.35, "AMD":  0.20, "PLTR": 0.10,
-    "MELI": 0.10, "RKLB": 0.10, "ASTS": 0.05,
-    "LSE":  0.05, "CASH": 0.05,
-}
 
-# Watchlist για earnings alerts
-WATCHLIST = ["AMD","PLTR","MELI","RKLB","ASTS","LSE","LITE","NVDA","MSFT","ASML"]
+async def buy(ticker: str, reason: str, source: str = "", potential: str = ""):
+    body = reason + (f" | Potential: {potential}" if potential else "")
+    return await _send(f"ΑΓΟΡΑ — {ticker}", body,
+                       {"type": "BUY", "ticker": ticker, "source": source},
+                       urgency="high")
+
+async def sell(ticker: str, reason: str, urgency: str = "critical"):
+    return await _send(f"ΠΟΥΛΑ — {ticker}", reason,
+                       {"type": "SELL", "ticker": ticker},
+                       urgency=urgency)
+
+async def info(title: str, body: str, data: dict = {}):
+    return await _send(title, body, {"type": "INFO", **data}, urgency="medium")
