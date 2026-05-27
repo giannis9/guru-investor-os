@@ -1,0 +1,267 @@
+"""
+Stock Discovery Agent
+- Ψάχνει νέες μετοχές από Buffett, Marks, Wood, Nash, Felix κλπ
+- Τις αξιολογεί βάσει του στόχου σου
+- Λέει πότε να αγοράσεις και πότε να πουλάς
+- Τρέχει κάθε Δευτέρα 06:00 UTC
+"""
+import os, asyncio, aiohttp, json
+from datetime import datetime
+
+GROQ_KEY    = os.getenv("GROQ_API_KEY", "")
+FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
+FCM_KEY     = os.getenv("FCM_SERVER_KEY", "")
+
+CURRENCY    = "£"
+GOAL        = float(os.getenv("GOAL_AMOUNT", "3000"))
+GOAL_MONTHS = int(os.getenv("GOAL_MONTHS", "24"))
+RISK_LEVEL  = os.getenv("RISK_LEVEL", "moderate")  # conservative/moderate/aggressive
+
+# Μετοχές που ήδη έχεις — δεν θα τις ξανα-προτείνει
+EXISTING = ["AMD", "RKLB", "PLTR", "MELI", "ASTS", "LSE", "VWCE", "LITE"]
+
+# Guru universe — κάθε guru με το φιλοσοφικό του πλαίσιο
+GURUS = {
+    "Warren Buffett": {
+        "style": "value investing, margin of safety, moat, long-term hold 5+ years",
+        "favorites": ["AAPL","BRK.B","OXY","KO","AXP","BAC","CVX"],
+        "avoid": ["speculative", "no earnings", "high P/E > 30"],
+    },
+    "Howard Marks": {
+        "style": "risk-first, market cycles, defensive in late cycle",
+        "favorites": ["BRK.B","JNJ","PG","WMT","VZ"],
+        "avoid": ["high beta", "speculative tech", "meme stocks"],
+    },
+    "Cathie Wood": {
+        "style": "disruptive innovation, 5-year horizon, AI/robotics/space/genomics",
+        "favorites": ["TSLA","NVDA","RKLB","ASTS","COIN","ROKU","SQ"],
+        "avoid": ["legacy industries", "no growth"],
+    },
+    "Tom Nash": {
+        "style": "DCF valuation, undervalued quality companies, 3-5 year hold",
+        "favorites": ["MSFT","GOOGL","AMZN","TSM","ASML","META"],
+        "avoid": ["overvalued P/E > 50 without growth"],
+    },
+    "Ben Felix": {
+        "style": "factor investing, small-cap value, low-cost ETFs, evidence-based",
+        "favorites": ["VWCE","AVUV","AVDV","VBR","VIOV"],
+        "avoid": ["single stocks unless strong factor exposure", "high fees"],
+    },
+    "Bill Ackman": {
+        "style": "concentrated positions, activist investing, high conviction",
+        "favorites": ["GOOGL","HLT","CMG","CP","BN"],
+        "avoid": ["many positions", "low conviction ideas"],
+    },
+}
+
+# Candidate stocks universe
+CANDIDATES = [
+    "MSFT","GOOGL","AMZN","TSLA","NVDA","META","ASML","TSM",
+    "BRK.B","AAPL","V","MA","NU","SOFI","HLT","CMG","NVO","LLY",
+    "UNH","ISRG","O","VNQ","QQQ","AVUV","VBR","CP","BN","COIN",
+]
+
+
+async def ask_groq(session, prompt, max_tokens=800):
+    if not GROQ_KEY:
+        print("[GROQ] No key"); return ""
+    headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+    body = {"model": "llama-3.3-70b-versatile", "max_tokens": max_tokens,
+            "temperature": 0.15,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"}}
+    async with session.post("https://api.groq.com/openai/v1/chat/completions",
+                            headers=headers, json=body,
+                            timeout=aiohttp.ClientTimeout(total=45)) as r:
+        if r.status != 200:
+            print(f"[GROQ] Error {r.status}: {await r.text()}"); return ""
+        d = await r.json()
+        return d["choices"][0]["message"]["content"].strip()
+
+
+async def get_stock_data(session, ticker):
+    """Βασικά metrics από Finnhub."""
+    if not FINNHUB_KEY:
+        return {}
+    try:
+        # Quote
+        async with session.get(
+            f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_KEY}"
+        ) as r:
+            quote = await r.json() if r.status == 200 else {}
+        await asyncio.sleep(0.3)
+
+        # Basic financials
+        async with session.get(
+            f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={FINNHUB_KEY}"
+        ) as r:
+            metrics = (await r.json()).get("metric", {}) if r.status == 200 else {}
+        await asyncio.sleep(0.3)
+
+        return {
+            "price":       quote.get("c"),
+            "change_pct":  round(((quote.get("c",0) - quote.get("pc",1)) / quote.get("pc",1)) * 100, 2) if quote.get("pc") else None,
+            "pe_ttm":      metrics.get("peBasicExclExtraTTM"),
+            "eps_growth":  metrics.get("epsGrowthTTMYoy"),
+            "revenue_growth": metrics.get("revenueGrowthTTMYoy"),
+            "week52_high": metrics.get("52WeekHigh"),
+            "week52_low":  metrics.get("52WeekLow"),
+            "beta":        metrics.get("beta"),
+        }
+    except Exception as e:
+        print(f"  [DATA] {ticker}: {e}")
+        return {}
+
+
+async def send_push(title, body, urgency="medium"):
+    if not FCM_KEY:
+        print(f"[PUSH] {title}: {body}"); return
+    color = {"critical":"#c05050","high":"#2d9b6f","medium":"#b8860b"}.get(urgency,"#888")
+    payload = {
+        "to": "/topics/guru_alerts",
+        "priority": "high" if urgency in ("critical","high") else "normal",
+        "notification": {"title": title, "body": body},
+        "android": {"notification": {"color": color, "channel_id": "guru_alerts"}},
+    }
+    async with aiohttp.ClientSession() as s:
+        async with s.post("https://fcm.googleapis.com/fcm/send",
+                          headers={"Authorization": f"key={FCM_KEY}",
+                                   "Content-Type": "application/json"},
+                          json=payload) as r:
+            ok = (await r.json()).get("success", 0) > 0
+            print(f"[PUSH] {'OK' if ok else 'FAIL'}: {title}")
+
+
+async def main():
+    print(f"\n{'='*50}")
+    print(f"Stock Discovery Agent — {datetime.utcnow().strftime('%Y-%m-%d')}")
+    print(f"Goal: {CURRENCY}{GOAL:,.0f} in {GOAL_MONTHS} months | Risk: {RISK_LEVEL}")
+    print(f"{'='*50}")
+
+    # Filter out existing positions
+    candidates = [t for t in CANDIDATES if t not in EXISTING]
+    print(f"\nAnalyzing {len(candidates)} candidate stocks...")
+
+    async with aiohttp.ClientSession() as session:
+
+        # Get market data for candidates
+        stock_data = {}
+        for ticker in candidates[:15]:  # limit to 15 to avoid rate limits
+            print(f"  Fetching {ticker}...")
+            stock_data[ticker] = await get_stock_data(session, ticker)
+
+        # Build guru context
+        guru_context = json.dumps(GURUS, ensure_ascii=False, indent=2)
+
+        # Ask Groq to find best picks
+        prompt = f"""Είσαι AI επενδυτικός σύμβουλος. Βρες τις καλύτερες μετοχές για τον επενδυτή.
+
+ΣΤΟΧΟΣ ΕΠΕΝΔΥΤΗ:
+- Θέλει να φτάσει {CURRENCY}{GOAL:,.0f} σε {GOAL_MONTHS} μήνες
+- Ανοχή ρίσκου: {RISK_LEVEL}
+- Νόμισμα: {CURRENCY} (British Pounds)
+
+ΉΔΗ ΕΧΕΙ: {EXISTING}
+
+GURU PHILOSOPHIES:
+{guru_context}
+
+ΔΙΑΘΕΣΙΜΕΣ ΜΕΤΟΧΕΣ ΜΕ ΔΕΔΟΜΕΝΑ:
+{json.dumps(stock_data, ensure_ascii=False, indent=2)}
+
+ΥΠΟΨΗΦΙΕΣ (χωρίς δεδομένα): {[t for t in candidates if t not in stock_data]}
+
+Επίστρεψε JSON με τις top 5 συστάσεις:
+{{
+  "top_picks": [
+    {{
+      "ticker": "MSFT",
+      "company": "Microsoft",
+      "signal": "BUY",
+      "buy_price_gbp": 310.0,
+      "target_price_gbp": 380.0,
+      "stop_loss_gbp": 265.0,
+      "timeframe": "12-18 months",
+      "allocation_pct": 8,
+      "gurus_supporting": ["Tom Nash", "Bill Ackman"],
+      "reason_greek": "Εξήγηση γιατί να αγοράσεις τώρα (2 προτάσεις)",
+      "when_to_sell_greek": "Πότε να πουλήσεις (1 πρόταση)",
+      "risk_level": "medium",
+      "goal_contribution": "Συμβάλλει στον στόχο σου με +X% potential"
+    }}
+  ],
+  "market_summary_greek": "Σύνοψη αγοράς τώρα (2 προτάσεις)",
+  "goal_strategy_greek": "Στρατηγική για να πιάσεις {CURRENCY}{GOAL} σε {GOAL_MONTHS} μήνες"
+}}"""
+
+        print("\nAsking Groq AI for stock picks...")
+        raw = await ask_groq(session, prompt, max_tokens=1200)
+
+        # Parse response
+        try:
+            result = json.loads(raw)
+        except:
+            print(f"Parse error: {raw[:200]}")
+            return
+
+        picks      = result.get("top_picks", [])
+        summary    = result.get("market_summary_greek", "")
+        strategy   = result.get("goal_strategy_greek", "")
+
+        # Display results
+        print(f"\n{'='*50}")
+        print("TOP STOCK PICKS THIS WEEK")
+        print(f"{'='*50}")
+        print(f"\nMarket: {summary}")
+        print(f"\nGoal Strategy: {strategy}")
+        print(f"\n{'─'*50}")
+
+        for i, pick in enumerate(picks, 1):
+            ticker  = pick.get("ticker","")
+            signal  = pick.get("signal","BUY")
+            buy_p   = pick.get("buy_price_gbp", 0)
+            target  = pick.get("target_price_gbp", 0)
+            sl      = pick.get("stop_loss_gbp", 0)
+            alloc   = pick.get("allocation_pct", 5)
+            gurus   = ", ".join(pick.get("gurus_supporting", []))
+            reason  = pick.get("reason_greek", "")
+            sell_when = pick.get("when_to_sell_greek", "")
+            timeframe = pick.get("timeframe", "")
+            potential = round((target - buy_p) / buy_p * 100, 1) if buy_p else 0
+
+            print(f"\n#{i} {ticker} — {signal}")
+            print(f"   Αγορά: {CURRENCY}{buy_p:.2f} | Target: {CURRENCY}{target:.2f} (+{potential}%) | Stop: {CURRENCY}{sl:.2f}")
+            print(f"   Allocation: {alloc}% | Timeframe: {timeframe}")
+            print(f"   Gurus: {gurus}")
+            print(f"   Γιατί: {reason}")
+            print(f"   Πότε να πουλήσεις: {sell_when}")
+
+        # Send push notifications for top 3
+        for pick in picks[:3]:
+            ticker   = pick.get("ticker","")
+            buy_p    = pick.get("buy_price_gbp",0)
+            target   = pick.get("target_price_gbp",0)
+            potential = round((target-buy_p)/buy_p*100,1) if buy_p else 0
+            gurus    = ", ".join(pick.get("gurus_supporting",[])[:2])
+            reason   = pick.get("reason_greek","")[:80]
+
+            await send_push(
+                f"🟢 Νέα ευκαιρία — {ticker} (+{potential}%)",
+                f"{gurus}: {reason} | Αγορά: {CURRENCY}{buy_p:.2f} → Target: {CURRENCY}{target:.2f}",
+                urgency="high"
+            )
+            await asyncio.sleep(1)
+
+        # Weekly summary push
+        tickers = [p["ticker"] for p in picks]
+        await send_push(
+            "📈 Weekly Stock Picks",
+            f"Top picks: {', '.join(tickers)} | Goal: {CURRENCY}{GOAL:,.0f}",
+            urgency="medium"
+        )
+
+    print(f"\n{'='*50}")
+    print("Stock Discovery done.")
+
+
+asyncio.run(main())
