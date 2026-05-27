@@ -1,1 +1,7 @@
-
+name: disabled
+on: workflow_dispatch
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Use agents.yml instead"
