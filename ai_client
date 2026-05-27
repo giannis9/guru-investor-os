@@ -1,0 +1,71 @@
+"""
+AI Client — Groq (δωρεάν) + Gemini fallback (δωρεάν)
+Groq:   groq.com          → 14.400 req/ημέρα ΔΩΡΕΑΝ
+Gemini: aistudio.google.com → 1.500 req/ημέρα ΔΩΡΕΑΝ
+"""
+import os, json, aiohttp
+from typing import Optional
+
+GROQ_API_KEY   = os.getenv("GROQ_API_KEY",   "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY",  "")
+GROQ_MODEL     = "llama-3.3-70b-versatile"
+GEMINI_MODEL   = "gemini-1.5-flash"
+
+
+async def ask_ai(session: aiohttp.ClientSession, prompt: str,
+                 max_tokens: int = 800, json_mode: bool = False) -> str:
+    if GROQ_API_KEY:
+        r = await _groq(session, prompt, max_tokens, json_mode)
+        if r: return r
+    if GEMINI_API_KEY:
+        r = await _gemini(session, prompt, max_tokens)
+        if r: return r
+    return '{"error":"Βάλε GROQ_API_KEY στα GitHub Secrets"}'
+
+
+async def _groq(session, prompt, max_tokens, json_mode) -> Optional[str]:
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}",
+               "Content-Type": "application/json"}
+    body = {"model": GROQ_MODEL, "max_tokens": max_tokens,
+            "temperature": 0.1,
+            "messages": [{"role": "user", "content": prompt}]}
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    try:
+        async with session.post("https://api.groq.com/openai/v1/chat/completions",
+                                headers=headers, json=body,
+                                timeout=aiohttp.ClientTimeout(total=30)) as r:
+            if r.status == 429: return None
+            if r.status != 200: return None
+            d = await r.json()
+            return d["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[GROQ] {e}"); return None
+
+
+async def _gemini(session, prompt, max_tokens) -> Optional[str]:
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}")
+    body = {"contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.1}}
+    try:
+        async with session.post(url, json=body,
+                                timeout=aiohttp.ClientTimeout(total=30)) as r:
+            if r.status != 200: return None
+            d = await r.json()
+            return d["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        print(f"[GEMINI] {e}"); return None
+
+
+def parse_json(raw: str) -> dict:
+    text = raw.strip()
+    if "```" in text:
+        for part in text.split("```"):
+            c = part.strip().lstrip("json").strip()
+            if c.startswith("{"):
+                text = c; break
+    s, e = text.find("{"), text.rfind("}")
+    if s != -1 and e != -1: text = text[s:e+1]
+    try: return json.loads(text)
+    except: return {"raw": raw}
