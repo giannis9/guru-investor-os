@@ -1,2 +1,71 @@
-aiohttp>=3.9.0
-youtube-transcript-api>=0.6.2
+name: Guru Investor OS
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        type: choice
+        default: portfolio
+        options: [portfolio, discovery, rebalancer, sec]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  portfolio:
+    name: Portfolio Manager
+    runs-on: ubuntu-latest
+    if: github.event.inputs.module == 'portfolio'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python portfolio_manager.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+
+  discovery:
+    name: Stock Discovery
+    runs-on: ubuntu-latest
+    if: github.event.inputs.module == 'discovery'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python stock_discovery.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+
+  rebalancer:
+    name: Rebalancer
+    runs-on: ubuntu-latest
+    if: github.event.inputs.module == 'rebalancer'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python rebalancer.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
+
+  sec:
+    name: SEC 13F Tracker
+    runs-on: ubuntu-latest
+    if: github.event.inputs.module == 'sec'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install aiohttp
+      - run: python sec_tracker.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          FCM_SERVER_KEY: ${{ secrets.FCM_SERVER_KEY }}
