@@ -1,0 +1,63 @@
+{
+  "_comment": "Άλλαξε αυτές τις τιμές για να προσαρμόσεις το σύστημα",
+
+  "goal": {
+    "target_gbp": 10000,
+    "months": 24,
+    "monthly_contribution_gbp": 200,
+    "risk_level": "moderate",
+    "_risk_options": "conservative | moderate | aggressive"
+  },
+
+  "portfolio": {
+    "currency": "GBP",
+    "positions": [
+      {"ticker": "ETSY",  "name": "Etsy",          "value_gbp": 0.59,   "shares": 0},
+      {"ticker": "PFE",   "name": "Pfizer",         "value_gbp": 0.59,   "shares": 0},
+      {"ticker": "ABNB",  "name": "Airbnb",         "value_gbp": 0.97,   "shares": 0},
+      {"ticker": "BBAI",  "name": "BigBear.ai",     "value_gbp": 1.21,   "shares": 0},
+      {"ticker": "BIO",   "name": "Biotest",        "value_gbp": 1.38,   "shares": 0},
+      {"ticker": "AAISP", "name": "AAISP",          "value_gbp": 1.41,   "shares": 0},
+      {"ticker": "IHG",   "name": "IHG Hotels",     "value_gbp": 1.78,   "shares": 0},
+      {"ticker": "EBAY",  "name": "eBay",           "value_gbp": 1.91,   "shares": 0},
+      {"ticker": "SHEL",  "name": "Shell",          "value_gbp": 1.95,   "shares": 0},
+      {"ticker": "BRAI",  "name": "Brain Scientific","value_gbp": 2.11,   "shares": 0},
+      {"ticker": "META",  "name": "Meta",           "value_gbp": 2.61,   "shares": 0},
+      {"ticker": "AZN",   "name": "AstraZeneca",    "value_gbp": 2.93,   "shares": 0},
+      {"ticker": "BP",    "name": "BP",             "value_gbp": 3.30,   "shares": 0},
+      {"ticker": "NVDA",  "name": "Nvidia",         "value_gbp": 5.07,   "shares": 0},
+      {"ticker": "DDOG",  "name": "Datadog",        "value_gbp": 5.19,   "shares": 0},
+      {"ticker": "RIO",   "name": "Rio Tinto",      "value_gbp": 5.52,   "shares": 0},
+      {"ticker": "BARC",  "name": "Barclays",       "value_gbp": 5.53,   "shares": 0},
+      {"ticker": "TEVA",  "name": "Teva Pharma",    "value_gbp": 6.41,   "shares": 0},
+      {"ticker": "AGX",   "name": "Argan Inc",      "value_gbp": 8.65,   "shares": 0},
+      {"ticker": "STRL",  "name": "Sterling Infra", "value_gbp": 10.55,  "shares": 0},
+      {"ticker": "NBIS",  "name": "Nebius Group",   "value_gbp": 11.63,  "shares": 0},
+      {"ticker": "GOOGL", "name": "Alphabet",       "value_gbp": 16.10,  "shares": 0},
+      {"ticker": "AMD",   "name": "AMD",            "value_gbp": 18.79,  "shares": 0},
+      {"ticker": "VUSA",  "name": "Vanguard S&P500","value_gbp": 32.94,  "shares": 0},
+      {"ticker": "ASTS",  "name": "AST SpaceMobile","value_gbp": 55.42,  "shares": 0},
+      {"ticker": "PLTR",  "name": "Palantir",       "value_gbp": 127.72, "shares": 0},
+      {"ticker": "LITE",  "name": "Lumentum",       "value_gbp": 165.11, "shares": 0}
+    ],
+    "cash_gbp": 0
+  },
+
+  "alerts": {
+    "stop_loss_pct": -20,
+    "profit_take_pct": 100,
+    "overweight_limit_pct": 20,
+    "dca_day_of_month": 1
+  },
+
+  "gurus": [
+    "Warren Buffett",
+    "Howard Marks",
+    "Cathie Wood",
+    "Tom Nash",
+    "Ben Felix",
+    "Bill Ackman",
+    "Andrei Jikh",
+    "The Plain Bagel"
+  ]
+}
